@@ -1,0 +1,14 @@
+{
+  "refresh_ok": true,
+  "fetched_at": "2026-08-12T21:21:01+00:00",
+  "source_data_as_of": "2026-07-08T00:00:00",
+  "source_loaded_at": "2026-07-27T13:48:32.529000",
+  "provisional_checked_through": "2026-08-12T00:00:00",
+  "official_records": 366,
+  "open_provisional_records": 2,
+  "snapshot": "fatalities_20260812T212101Z.parquet",
+  "raw_snapshot": "raw/2026-08-12/dau3-4s8f_2026-08-12T212101Z.json",
+  "raw_manifest": "raw/2026-08-12/manifest_2026-08-12T212101Z.json",
+  "revisions_detected": 0,
+  "revision_log_rows": 0
+}
