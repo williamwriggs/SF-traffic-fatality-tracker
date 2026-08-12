@@ -2,6 +2,8 @@
 
 An open-source, revision-aware tracker for traffic fatalities in San Francisco. It fetches the City’s official Vision Zero fatality records from DataSF, preserves every source snapshot, keeps recent public reports separate until reconciliation, and serves a Streamlit dashboard for year-to-year comparison and downloads.
 
+Research by **William W. Riggs**. Source code, methodology, and revision history are maintained in this repository.
+
 The tracker is designed for journalists, researchers, students, and residents who need to answer not only “what is the current count?” but also “what did the City publish last time, and what changed?”
 
 ![Generated publication chart](assets/generated_2017_vs_2026.png)
@@ -20,6 +22,7 @@ The supplied visual is retained as `assets/reference_chart.png`; the image above
 - Calculates monthly, cumulative, YTD, same-date comparison, mode shares, rolling 12-month, seasonality, and days-since-last-event metrics.
 - Provides interactive charts, a map, exact record downloads, and downloadable snapshot comparisons.
 - Supports a two-year detail view with modal endpoint stacks and a multi-year trend view with up to six selected years.
+- Switches the annual mode chart between fatality totals and a 100%-normalized proportional breakdown.
 
 ## Why the official source changed from the original handoff
 

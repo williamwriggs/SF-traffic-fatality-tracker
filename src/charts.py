@@ -395,25 +395,75 @@ def multi_year_chart(
     return styled
 
 
-def annual_mode_chart(records: pd.DataFrame, start_year: int = 2014) -> go.Figure:
+def annual_mode_chart(
+    records: pd.DataFrame,
+    start_year: int = 2014,
+    normalized: bool = False,
+) -> go.Figure:
     annual = annual_mode_counts(records, start_year)
+    annual["annual_total"] = annual.groupby("year")["fatalities"].transform("sum")
+    annual["share"] = annual["fatalities"].div(annual["annual_total"]).mul(100)
+    value_column = "share" if normalized else "fatalities"
+    subtitle = (
+        "Mode share within each year · each bar = 100% · latest year may be partial"
+        if normalized
+        else "Official victim-level DataSF records · latest year may be partial"
+    )
     fig = px.bar(
         annual,
         x="year",
-        y="fatalities",
+        y=value_column,
         color="normalized_mode",
+        custom_data=["fatalities", "annual_total"],
         category_orders={"normalized_mode": MODE_ORDER},
         color_discrete_map=COLORS,
-        labels={"year": "Collision year", "fatalities": "Fatalities", "normalized_mode": "Mode"},
+        labels={
+            "year": "Collision year",
+            "fatalities": "Fatalities",
+            "share": "Share of annual fatalities",
+            "normalized_mode": "Mode",
+        },
     )
+    if normalized:
+        fig.update_traces(
+            hovertemplate=(
+                "<b>%{fullData.name}</b><br>Collision year=%{x}<br>"
+                "Share=%{y:.1f}%<br>Fatalities=%{customdata[0]} of %{customdata[1]}"
+                "<extra></extra>"
+            )
+        )
+    else:
+        fig.update_traces(
+            hovertemplate=(
+                "<b>%{fullData.name}</b><br>Collision year=%{x}<br>"
+                "Fatalities=%{y}<br>Annual total=%{customdata[1]}<extra></extra>"
+            )
+        )
+    _base_layout(fig, 560)
     fig.update_layout(
         title={
-            "text": "Annual traffic fatalities by mode<br><sup>Official victim-level DataSF records</sup>",
+            "text": f"Annual traffic fatalities by mode<br><sup>{subtitle}</sup>",
             "x": 0,
+            "xanchor": "left",
+            "y": 0.98,
+            "yanchor": "top",
         },
         bargap=0.22,
+        margin={"l": 55, "r": 35, "t": 190, "b": 65},
+        legend={
+            "orientation": "h",
+            "yanchor": "bottom",
+            "y": 1.01,
+            "x": 0,
+            "xanchor": "left",
+            "title": None,
+        },
     )
-    return _base_layout(fig, 480)
+    if normalized:
+        fig.update_yaxes(range=[0, 100], ticksuffix="%", title="Share of annual fatalities")
+    else:
+        fig.update_yaxes(title="Fatalities")
+    return fig
 
 
 def seasonality_chart(records: pd.DataFrame, start_year: int = 2014) -> go.Figure:

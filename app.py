@@ -53,6 +53,9 @@ st.markdown(
     .provisional-pill { display:inline-block; border:1px dashed #132A70; color:#132A70;
                         padding:.15rem .45rem; border-radius:999px; font-size:.75rem; }
     .source-note { font-size: .82rem; color: #62676C; line-height: 1.45; }
+    .research-credit { color: #62676C; font-size: .88rem; margin: -.55rem 0 1.15rem 0; }
+    .research-credit a { color: #132A70; font-weight: 650; text-decoration: none; }
+    .research-credit a:hover { text-decoration: underline; }
     div[data-testid="stDataFrame"] { border: 1px solid #D8D7D2; }
     @media (max-width: 700px) {
       .block-container { padding-left: 1rem; padding-right: 1rem; }
@@ -200,6 +203,12 @@ st.markdown(
     "as official.</div>",
     unsafe_allow_html=True,
 )
+st.markdown(
+    '<div class="research-credit">Research by <strong>William W. Riggs</strong> · '
+    '<a href="https://github.com/williamwriggs/SF-traffic-fatality-tracker" '
+    'target="_blank" rel="noopener noreferrer">View source and methodology on GitHub ↗</a></div>',
+    unsafe_allow_html=True,
+)
 
 status_class = "warn" if open_provisional_total else ""
 status_text = (
@@ -328,7 +337,18 @@ with overview:
             f"in {current_year} to date."
         )
 
-    st.plotly_chart(annual_mode_chart(official), width="stretch")
+    normalize_annual_modes = st.toggle(
+        "Show annual mode share (normalize each year to 100%)",
+        value=False,
+        help=(
+            "Switch from fatality counts to the proportional mode mix within each year. "
+            "The latest year may represent only a partial year."
+        ),
+    )
+    st.plotly_chart(
+        annual_mode_chart(official, normalized=normalize_annual_modes),
+        width="stretch",
+    )
     st.plotly_chart(seasonality_chart(official), width="stretch")
 
 with explore:
@@ -465,7 +485,9 @@ with methodology:
 st.divider()
 st.markdown(
     f'<div class="source-note">Snapshot fetched {pd.to_datetime(status["fetched_at"]):%B %-d, %Y at %H:%M UTC}. '
-    "Code and methodology are released under the MIT License. Values can change when City agencies "
-    "reconcile records.</div>",
+    'Research by William W. Riggs. '
+    '<a href="https://github.com/williamwriggs/SF-traffic-fatality-tracker" '
+    'target="_blank" rel="noopener noreferrer">Source code and methodology on GitHub</a> are '
+    "released under the MIT License. Values can change when City agencies reconcile records.</div>",
     unsafe_allow_html=True,
 )
