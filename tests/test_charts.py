@@ -1,6 +1,12 @@
 import pandas as pd
 
-from src.charts import coverage_date, coverage_label, hero_chart, multi_year_chart
+from src.charts import (
+    annual_mode_chart,
+    coverage_date,
+    coverage_label,
+    hero_chart,
+    multi_year_chart,
+)
 
 
 def chart_records() -> pd.DataFrame:
@@ -58,3 +64,29 @@ def test_multi_year_chart_includes_each_selected_year_and_provisional_extension(
     assert figure.layout.title.text.startswith(
         "Traffic Fatalities in San Francisco: Multi-year comparison"
     )
+
+
+def test_annual_mode_chart_can_normalize_each_year_to_100_percent():
+    records = chart_records()
+    official = records[records["record_status"].eq("official")]
+    figure = annual_mode_chart(official, start_year=2016, normalized=True)
+
+    totals_by_year: dict[int, float] = {}
+    for trace in figure.data:
+        for year, share in zip(trace.x, trace.y, strict=True):
+            totals_by_year[int(year)] = totals_by_year.get(int(year), 0) + float(share)
+
+    assert all(round(total, 8) == 100 for total in totals_by_year.values())
+    assert figure.layout.yaxis.range == (0, 100)
+    assert figure.layout.yaxis.ticksuffix == "%"
+    assert "each bar = 100%" in figure.layout.title.text
+
+
+def test_annual_mode_chart_reserves_header_space_for_title_and_legend():
+    records = chart_records()
+    official = records[records["record_status"].eq("official")]
+    figure = annual_mode_chart(official, start_year=2016)
+
+    assert figure.layout.margin.t >= 180
+    assert figure.layout.title.yanchor == "top"
+    assert figure.layout.legend.yanchor == "bottom"
