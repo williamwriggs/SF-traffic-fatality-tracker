@@ -31,6 +31,35 @@ COLORS = {
     "paper": "#FBFAF7",
 }
 
+YEAR_PALETTE = ["#E76600", "#176F82", "#7D728F", "#A06C4F", "#719A9C", "#8A7D25"]
+
+
+def is_complete_year(records: pd.DataFrame, year: int) -> bool:
+    """A year is complete when the dataset contains at least one later year."""
+    years = pd.to_numeric(records.get("year", pd.Series(dtype="Int64")), errors="coerce")
+    return bool(not years.dropna().empty and int(year) < int(years.max()))
+
+
+def coverage_date(records: pd.DataFrame, year: int, as_of: pd.Timestamp) -> pd.Timestamp:
+    """Return Dec. 31 for historical years and the checked-through date for the latest year."""
+    if is_complete_year(records, year):
+        return pd.Timestamp(year=int(year), month=12, day=31)
+    date = pd.Timestamp(as_of)
+    return date.tz_localize(None) if date.tzinfo else date
+
+
+def coverage_label(records: pd.DataFrame, year: int, as_of: pd.Timestamp) -> str:
+    date = coverage_date(records, year, as_of)
+    return f"Dec. {year}" if is_complete_year(records, year) else date.strftime("%b. %-d, %Y")
+
+
+def _series_label(records: pd.DataFrame, year: int, total: int, provisional: int = 0) -> str:
+    if provisional:
+        return f"{year} · {total} ({provisional} provisional)"
+    if is_complete_year(records, year):
+        return f"{year} · full year = {total}"
+    return f"{year} · official = {total}"
+
 
 def _base_layout(fig: go.Figure, height: int = 540) -> go.Figure:
     fig.update_layout(
@@ -60,33 +89,98 @@ def hero_chart(
     comparison_year: int,
     as_of: pd.Timestamp,
 ) -> go.Figure:
-    comparator = monthly_cumulative(official, comparison_year)
+    comparator = monthly_cumulative(combined, comparison_year)
+    comparator_official = monthly_cumulative(official, comparison_year)
     current = monthly_cumulative(combined, current_year)
     current_official = monthly_cumulative(official, current_year)
     current_rows = combined[combined["year"].eq(current_year)]
     official_rows = official[official["year"].eq(current_year)]
-    latest_official_month = int(official_rows["month"].max()) if not official_rows.empty else 1
-    latest_current_month = int(current_rows["month"].max()) if not current_rows.empty else latest_official_month
+    comparison_rows = combined[combined["year"].eq(comparison_year)]
+    comparison_official_rows = official[official["year"].eq(comparison_year)]
+    latest_official_month = (
+        12
+        if is_complete_year(combined, current_year)
+        else int(official_rows["month"].max())
+        if not official_rows.empty
+        else 1
+    )
+    latest_current_month = (
+        12
+        if is_complete_year(combined, current_year)
+        else int(current_rows["month"].max())
+        if not current_rows.empty
+        else latest_official_month
+    )
+    latest_comparison_official_month = (
+        12
+        if is_complete_year(combined, comparison_year)
+        else int(comparison_official_rows["month"].max())
+        if not comparison_official_rows.empty
+        else 1
+    )
+    latest_comparison_month = (
+        12
+        if is_complete_year(combined, comparison_year)
+        else int(comparison_rows["month"].max())
+        if not comparison_rows.empty
+        else latest_comparison_official_month
+    )
 
     fig = go.Figure()
+    comparison_provisional_total = int(
+        comparison_rows["record_status"].eq("provisional").sum()
+    )
+    comparison_total = len(comparison_rows)
+    comparison_official_part = comparator_official[
+        comparator_official["month"].le(latest_comparison_official_month)
+    ]
     fig.add_trace(
         go.Scatter(
-            x=comparator["month"],
-            y=comparator["official_cumulative"],
+            x=comparison_official_part["month"],
+            y=comparison_official_part["official_cumulative"],
             mode="lines+markers",
-            name=f"{comparison_year} (full year = {int(comparator['official'].sum())})",
+            name=_series_label(
+                combined,
+                comparison_year,
+                comparison_total,
+                comparison_provisional_total,
+            ),
             line={"color": COLORS["comparison"], "width": 3},
             marker={"size": 7},
             hovertemplate="%{x}: %{y} fatalities<extra></extra>",
         )
     )
+    if (
+        comparison_provisional_total
+        and latest_comparison_month > latest_comparison_official_month
+    ):
+        comparison_provisional_part = comparator[
+            comparator["month"].between(
+                latest_comparison_official_month, latest_comparison_month
+            )
+        ].copy()
+        comparison_provisional_part.loc[
+            comparison_provisional_part["month"].eq(latest_comparison_official_month),
+            "combined_cumulative",
+        ] = int(comparison_official_part.iloc[-1]["official_cumulative"])
+        fig.add_trace(
+            go.Scatter(
+                x=comparison_provisional_part["month"],
+                y=comparison_provisional_part["combined_cumulative"],
+                mode="lines+markers",
+                name=f"{comparison_year} provisional extension",
+                line={"color": COLORS["comparison"], "width": 3, "dash": "dash"},
+                marker={"size": 7, "symbol": "circle-open"},
+                hovertemplate="%{x}: %{y} official + provisional<extra></extra>",
+            )
+        )
     official_part = current_official[current_official["month"].le(latest_official_month)]
     fig.add_trace(
         go.Scatter(
             x=official_part["month"],
             y=official_part["official_cumulative"],
             mode="lines+markers",
-            name=f"{current_year} official ({len(official_rows)})",
+            name=_series_label(combined, current_year, len(official_rows)),
             line={"color": COLORS["current"], "width": 3},
             marker={"size": 7},
             hovertemplate="%{x}: %{y} official fatalities<extra></extra>",
@@ -106,7 +200,7 @@ def hero_chart(
                 x=provisional_part["month"],
                 y=provisional_part["combined_cumulative"],
                 mode="lines+markers",
-                name="Provisional extension",
+                name=f"{current_year} provisional extension",
                 line={"color": COLORS["current"], "width": 3, "dash": "dash"},
                 marker={"size": 7, "symbol": "circle-open"},
                 hovertemplate="%{x}: %{y} official + provisional<extra></extra>",
@@ -114,7 +208,7 @@ def hero_chart(
         )
 
     current_mix = mode_counts(current_rows, current_year)
-    comparison_mix = mode_counts(official, comparison_year)
+    comparison_mix = mode_counts(comparison_rows, comparison_year)
     bar_positions = {"current": latest_current_month + 0.22, "comparison": 13.1}
     for mode in MODE_ORDER:
         current_value = int(
@@ -139,18 +233,36 @@ def hero_chart(
         )
     fig.update_layout(barmode="stack")
     combined_total = len(current_rows)
+    provisional_total = int(current_rows["record_status"].eq("provisional").sum())
+    if provisional_total:
+        current_total_label = f"official + provisional = {combined_total}"
+    elif is_complete_year(combined, current_year):
+        current_total_label = f"total = {combined_total}"
+    else:
+        current_total_label = f"official = {combined_total}"
     fig.add_annotation(
         x=bar_positions["current"],
         y=combined_total + 0.6,
-        text=f"<b>{as_of:%b. %-d, %Y}</b><br>official + provisional = {combined_total}",
+        text=(
+            f"<b>{coverage_label(combined, current_year, as_of)}</b>"
+            f"<br>{current_total_label}"
+        ),
         showarrow=False,
         font={"color": COLORS["current"], "size": 13},
     )
-    comparison_total = len(official[official["year"].eq(comparison_year)])
+    if comparison_provisional_total:
+        comparison_total_label = f"official + provisional = {comparison_total}"
+    elif is_complete_year(combined, comparison_year):
+        comparison_total_label = f"total = {comparison_total}"
+    else:
+        comparison_total_label = f"official = {comparison_total}"
     fig.add_annotation(
         x=bar_positions["comparison"],
         y=comparison_total + 0.6,
-        text=f"<b>Dec. {comparison_year}</b><br>total = {comparison_total}",
+        text=(
+            f"<b>{coverage_label(combined, comparison_year, as_of)}</b>"
+            f"<br>{comparison_total_label}"
+        ),
         showarrow=False,
         font={"color": COLORS["comparison"], "size": 13},
     )
@@ -175,6 +287,111 @@ def hero_chart(
     )
     styled = _base_layout(fig, 720)
     styled.update_layout(margin={"l": 55, "r": 35, "t": 205, "b": 65})
+    return styled
+
+
+def multi_year_chart(
+    official: pd.DataFrame,
+    combined: pd.DataFrame,
+    years: list[int],
+    focus_year: int,
+) -> go.Figure:
+    """Compare cumulative monthly trajectories for up to six selected years."""
+    selected_years = sorted({int(year) for year in years})
+    if not selected_years:
+        return go.Figure()
+
+    other_years = [year for year in selected_years if year != focus_year]
+    color_map = {focus_year: COLORS["current"]}
+    for year, color in zip(other_years, YEAR_PALETTE, strict=False):
+        color_map[year] = color
+
+    fig = go.Figure()
+    max_total = 0
+    for year in selected_years:
+        year_official = official[official["year"].eq(year)]
+        year_combined = combined[combined["year"].eq(year)]
+        if year_official.empty and year_combined.empty:
+            continue
+        official_months = monthly_cumulative(official, year)
+        latest_official_month = (
+            12 if is_complete_year(combined, year) else int(year_official["month"].max())
+        )
+        official_part = official_months[official_months["month"].le(latest_official_month)]
+        color = color_map.get(year, YEAR_PALETTE[0])
+        width = 4 if year == focus_year else 2.5
+        provisional_total = int(year_combined["record_status"].eq("provisional").sum())
+        combined_total = len(year_combined) if provisional_total else len(year_official)
+        max_total = max(max_total, combined_total)
+        fig.add_trace(
+            go.Scatter(
+                x=official_part["month"],
+                y=official_part["official_cumulative"],
+                mode="lines+markers",
+                name=_series_label(combined, year, combined_total, provisional_total),
+                legendgroup=str(year),
+                line={"color": color, "width": width},
+                marker={"size": 8 if year == focus_year else 6},
+                hovertemplate=f"{year} %{{x}}: %{{y}} official fatalities<extra></extra>",
+            )
+        )
+
+        latest_combined_month = (
+            12
+            if is_complete_year(combined, year)
+            else int(year_combined["month"].max())
+            if not year_combined.empty
+            else latest_official_month
+        )
+        if provisional_total and latest_combined_month > latest_official_month:
+            combined_months = monthly_cumulative(combined, year)
+            provisional_part = combined_months[
+                combined_months["month"].between(latest_official_month, latest_combined_month)
+            ].copy()
+            provisional_part.loc[
+                provisional_part["month"].eq(latest_official_month), "combined_cumulative"
+            ] = int(official_part.iloc[-1]["official_cumulative"])
+            fig.add_trace(
+                go.Scatter(
+                    x=provisional_part["month"],
+                    y=provisional_part["combined_cumulative"],
+                    mode="lines+markers",
+                    name=f"{year} provisional extension",
+                    legendgroup=str(year),
+                    showlegend=False,
+                    line={"color": color, "width": width, "dash": "dash"},
+                    marker={"size": 7, "symbol": "circle-open"},
+                    hovertemplate=(
+                        f"{year} %{{x}}: %{{y}} official + provisional<extra></extra>"
+                    ),
+                )
+            )
+
+    fig.update_xaxes(
+        tickmode="array",
+        tickvals=list(range(1, 13)),
+        ticktext=[calendar.month_abbr[i] for i in range(1, 13)],
+        range=[0.75, 12.25],
+        title=None,
+    )
+    fig.update_yaxes(
+        range=[0, max(max_total + 4, 10)],
+        title="Cumulative traffic fatalities",
+        dtick=5,
+    )
+    fig.update_layout(
+        title={
+            "text": (
+                "Traffic Fatalities in San Francisco: Multi-year comparison"
+                f"<br><sup>{', '.join(str(year) for year in selected_years)}; "
+                "dashed segment is unreconciled</sup>"
+            ),
+            "x": 0,
+            "xanchor": "left",
+        }
+    )
+    styled = _base_layout(fig, 650)
+    styled.update_layout(margin={"l": 55, "r": 35, "t": 165, "b": 65})
     return styled
 
 
