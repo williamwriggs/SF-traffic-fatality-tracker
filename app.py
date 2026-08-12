@@ -10,7 +10,16 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from src.charts import COLORS, annual_mode_chart, hero_chart, map_chart, seasonality_chart
+from src.charts import (
+    COLORS,
+    annual_mode_chart,
+    coverage_date,
+    hero_chart,
+    is_complete_year,
+    map_chart,
+    multi_year_chart,
+    seasonality_chart,
+)
 from src.export import write_matplotlib_fallback
 from src.metrics import MODE_ORDER, mode_counts, summary_metrics
 from src.reconcile import compare_snapshot_files, snapshot_files
@@ -112,12 +121,43 @@ official_years = sorted(official["year"].dropna().astype(int).unique())
 
 with st.sidebar:
     st.markdown("### Compare")
+    view_mode = st.radio(
+        "Visualization",
+        ["Two-year detail", "Multi-year trend"],
+        horizontal=True,
+    )
     current_year = st.selectbox("Focus year", available_years, index=0)
     comparison_candidates = [y for y in official_years if y != current_year]
     default_comparison = comparison_candidates.index(2017) if 2017 in comparison_candidates else 0
-    comparison_year = st.selectbox(
-        "Comparison year", comparison_candidates, index=default_comparison
-    )
+    if view_mode == "Two-year detail":
+        comparison_year = st.selectbox(
+            "Comparison year", comparison_candidates, index=default_comparison
+        )
+        chart_years = [comparison_year, current_year]
+    else:
+        default_additional = [
+            year
+            for year in (current_year - 1, 2017)
+            if year in comparison_candidates
+        ]
+        if not default_additional:
+            default_additional = comparison_candidates[:2]
+        additional_years = st.multiselect(
+            "Additional years",
+            comparison_candidates,
+            default=default_additional,
+            max_selections=5,
+            help="The focus year is always included; add up to five more years.",
+        )
+        chart_years = sorted({current_year, *additional_years})
+        earlier_years = [year for year in additional_years if year < current_year]
+        comparison_year = (
+            max(earlier_years)
+            if earlier_years
+            else additional_years[0]
+            if additional_years
+            else comparison_candidates[default_comparison]
+        )
     st.divider()
     st.markdown("### Definitions")
     include_provisional = st.toggle("Include unreconciled reports", value=True)
@@ -133,14 +173,24 @@ with st.sidebar:
     )
 
 analysis_records = combined if include_provisional else official
-as_of = pd.Timestamp.today().normalize()
-summary = summary_metrics(official, analysis_records, current_year, comparison_year, as_of)
-official_current = official[official["year"].eq(current_year)]
-combined_current = analysis_records[analysis_records["year"].eq(current_year)]
-last_official_collision = official_current["collision_date"].max()
 source_loaded = pd.to_datetime(status.get("source_loaded_at"), errors="coerce")
 source_reviewed = pd.to_datetime(status.get("source_data_as_of"), errors="coerce")
 provisional_checked = pd.to_datetime(status.get("provisional_checked_through"), errors="coerce")
+today = pd.Timestamp.today().normalize()
+latest_checked = provisional_checked if include_provisional else source_reviewed
+if pd.isna(latest_checked):
+    latest_checked = today
+focus_as_of = coverage_date(analysis_records, current_year, latest_checked)
+summary = summary_metrics(
+    official, analysis_records, current_year, comparison_year, focus_as_of
+)
+official_current = official[official["year"].eq(current_year)]
+combined_current = analysis_records[analysis_records["year"].eq(current_year)]
+latest_dataset_year = max(available_years)
+latest_official_collision = official.loc[
+    official["year"].eq(latest_dataset_year), "collision_date"
+].max()
+open_provisional_total = int(combined["record_status"].eq("provisional").sum())
 
 st.markdown('<div class="eyebrow">Public data · revision aware · open source</div>', unsafe_allow_html=True)
 st.title("SF Traffic Fatality Tracker")
@@ -151,12 +201,12 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-status_class = "warn" if summary.provisional_open else ""
+status_class = "warn" if open_provisional_total else ""
 status_text = (
     f"Official records currently include collisions through "
-    f"<strong>{last_official_collision:%B %-d, %Y}</strong> and were loaded to DataSF "
+    f"<strong>{latest_official_collision:%B %-d, %Y}</strong> and were loaded to DataSF "
     f"<strong>{source_loaded:%B %-d}</strong>. "
-    f"<span class='provisional-pill'>{summary.provisional_open} unreconciled public reports</span> "
+    f"<span class='provisional-pill'>{open_provisional_total} unreconciled public reports</span> "
     f"were checked through {provisional_checked:%B %-d, %Y}."
 )
 st.markdown(
@@ -164,21 +214,30 @@ st.markdown(
 )
 
 metric_cols = st.columns(5)
+focus_period = "full year" if is_complete_year(analysis_records, current_year) else "tracked YTD"
 metric_cols[0].metric(
-    f"{current_year} tracked YTD",
+    f"{current_year} {focus_period}",
     summary.combined_ytd,
     help="Official plus open provisional records when the sidebar toggle is on.",
 )
 metric_cols[1].metric("Official", summary.official_ytd)
 metric_cols[2].metric("Unreconciled", summary.provisional_open)
 metric_cols[3].metric(
-    f"vs. {comparison_year} same date",
+    (
+        f"vs. {comparison_year} full year"
+        if is_complete_year(analysis_records, current_year)
+        else f"vs. {comparison_year} same date"
+    ),
     f"{summary.year_over_year_change:+d}",
     delta=f"{summary.prior_year_same_date} in {comparison_year}",
     delta_color="off",
 )
 metric_cols[4].metric(
-    "Days since last tracked death",
+    (
+        "Days from last death to year-end"
+        if is_complete_year(analysis_records, current_year)
+        else "Days since last tracked death"
+    ),
     "—" if summary.days_since_last_fatality is None else summary.days_since_last_fatality,
 )
 
@@ -187,39 +246,66 @@ overview, explore, audit, methodology = st.tabs(
 )
 
 with overview:
-    hero = hero_chart(official, analysis_records, current_year, comparison_year, as_of)
-    st.plotly_chart(hero, width="stretch", config={"displaylogo": False})
-    st.markdown(
-        '<div class="source-note">Source: SFDPH/SFPD/SFMTA via DataSF. '
-        "Solid navy is official; dashed navy is the unreconciled extension. Endpoint stacks use the "
-        "trackers normalized display taxonomy while retaining each source-native mode.</div>",
-        unsafe_allow_html=True,
-    )
-    current_download = analysis_records[analysis_records["year"].eq(current_year)]
-    download_cols = st.columns([1, 1, 4])
-    download_cols[0].download_button(
-        "Download current-year CSV",
-        csv_bytes(current_download),
-        file_name=f"sf_traffic_fatalities_{current_year}_{as_of:%Y-%m-%d}.csv",
-        mime="text/csv",
-        width="stretch",
-    )
-    with tempfile.TemporaryDirectory() as temporary_dir:
-        temporary_png = Path(temporary_dir) / "hero.png"
-        write_matplotlib_fallback(
+    if view_mode == "Two-year detail":
+        hero = hero_chart(
             official,
             analysis_records,
             current_year,
             comparison_year,
-            as_of,
-            temporary_png,
-            1800,
-            1080,
+            focus_as_of,
         )
-        png = temporary_png.read_bytes()
-    if png:
-        download_cols[1].download_button(
-            "Download hero PNG",
+    else:
+        hero = multi_year_chart(
+            official,
+            analysis_records,
+            chart_years,
+            current_year,
+        )
+    st.plotly_chart(hero, width="stretch", config={"displaylogo": False})
+    chart_note = (
+        "Solid lines are official; dashed segments are unreconciled. Endpoint stacks use the "
+        "tracker's normalized display taxonomy while retaining each source-native mode."
+        if view_mode == "Two-year detail"
+        else "The focus year is emphasized with a heavier navy line. Other selected years are "
+        "context lines; any dashed extension remains unreconciled."
+    )
+    st.markdown(
+        f'<div class="source-note">Source: SFDPH/SFPD/SFMTA via DataSF. {chart_note}</div>',
+        unsafe_allow_html=True,
+    )
+    chart_download = analysis_records[analysis_records["year"].isin(chart_years)]
+    year_slug = "-".join(str(year) for year in sorted(chart_years))
+    download_cols = st.columns([1, 1, 1, 3])
+    download_cols[0].download_button(
+        "Download chart data",
+        csv_bytes(chart_download),
+        file_name=f"sf_traffic_fatalities_{year_slug}.csv",
+        mime="text/csv",
+        width="stretch",
+    )
+    download_cols[1].download_button(
+        "Download interactive chart",
+        hero.to_html(full_html=True, include_plotlyjs=True).encode("utf-8"),
+        file_name=f"sf_traffic_fatalities_{year_slug}.html",
+        mime="text/html",
+        width="stretch",
+    )
+    if view_mode == "Two-year detail":
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            temporary_png = Path(temporary_dir) / "hero.png"
+            write_matplotlib_fallback(
+                official,
+                analysis_records,
+                current_year,
+                comparison_year,
+                focus_as_of,
+                temporary_png,
+                1800,
+                1080,
+            )
+            png = temporary_png.read_bytes()
+        download_cols[2].download_button(
+            "Download publication PNG",
             png,
             file_name=f"sf_traffic_fatalities_{comparison_year}_vs_{current_year}.png",
             mime="image/png",

@@ -19,6 +19,7 @@ The supplied visual is retained as `assets/reference_chart.png`; the image above
 - Requires an explicit official record ID before a provisional incident is reconciled and removed from the combined count.
 - Calculates monthly, cumulative, YTD, same-date comparison, mode shares, rolling 12-month, seasonality, and days-since-last-event metrics.
 - Provides interactive charts, a map, exact record downloads, and downloadable snapshot comparisons.
+- Supports a two-year detail view with modal endpoint stacks and a multi-year trend view with up to six selected years.
 
 ## Why the official source changed from the original handoff
 
@@ -130,12 +131,12 @@ If DataSF is unavailable, the refresh command returns a nonzero exit status and 
 
 ## Dashboard guide
 
-- **Overview**: scan-first KPIs, year comparison hero, mode composition, annual history, and seasonality.
+- **Overview**: scan-first KPIs, a two-year detail or multi-year trend view, mode composition, annual history, and seasonality. Historical selections use full-year/December labels; the latest year uses its actual checked-through date.
 - **Explore records**: filter by year, normalized mode, and status; inspect a location map; download exact rows.
 - **Snapshots & revisions**: compare any two stored snapshots, download the diff, inspect the persistent revision log, and review provisional matches.
 - **Methodology**: definitions, caveats, source links, and the reconciliation policy.
 
-Plotly’s camera control exports any visible chart from the browser. The dedicated “Download hero PNG” button uses a headless-safe Matplotlib renderer. The command-line exporter will use Kaleido when the optional `plotly-png` extra and a working Chrome runtime are available, then fall back to Matplotlib automatically.
+Plotly’s camera control exports any visible chart from the browser. Every chart view can also be downloaded as a self-contained interactive HTML file, and the two-year detail view has a dedicated publication PNG export using a headless-safe Matplotlib renderer. The command-line exporter will use Kaleido when the optional `plotly-png` extra and a working Chrome runtime are available, then fall back to Matplotlib automatically.
 
 ## Automated refresh
 

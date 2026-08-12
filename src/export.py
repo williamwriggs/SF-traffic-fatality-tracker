@@ -11,7 +11,7 @@ import pandas as pd
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 
-from src.charts import COLORS, hero_chart
+from src.charts import COLORS, coverage_label, hero_chart, is_complete_year
 from src.metrics import MODE_ORDER, mode_counts, monthly_cumulative
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -28,25 +28,71 @@ def write_matplotlib_fallback(
     height: int,
 ) -> None:
     """Render a publication PNG when Chrome/Kaleido is unavailable."""
-    comparator = monthly_cumulative(official, comparison_year)
+    comparator = monthly_cumulative(combined, comparison_year)
+    comparator_official = monthly_cumulative(official, comparison_year)
     current = monthly_cumulative(combined, current_year)
     current_official = monthly_cumulative(official, current_year)
     official_rows = official[official["year"].eq(current_year)]
     current_rows = combined[combined["year"].eq(current_year)]
-    latest_official_month = int(official_rows["month"].max())
-    latest_month = int(current_rows["month"].max())
+    comparison_official_rows = official[official["year"].eq(comparison_year)]
+    comparison_rows = combined[combined["year"].eq(comparison_year)]
+    latest_official_month = (
+        12 if is_complete_year(combined, current_year) else int(official_rows["month"].max())
+    )
+    latest_month = (
+        12 if is_complete_year(combined, current_year) else int(current_rows["month"].max())
+    )
+    latest_comparison_official_month = (
+        12
+        if is_complete_year(combined, comparison_year)
+        else int(comparison_official_rows["month"].max())
+    )
+    latest_comparison_month = (
+        12
+        if is_complete_year(combined, comparison_year)
+        else int(comparison_rows["month"].max())
+    )
 
     dpi = 100
     fig = plt.figure(figsize=(width / dpi, height / dpi), dpi=dpi, facecolor=COLORS["paper"])
     ax = fig.add_axes([0.07, 0.17, 0.90, 0.56], facecolor=COLORS["paper"])
+    comparison_official_part = comparator_official[
+        comparator_official["month"].le(latest_comparison_official_month)
+    ]
     ax.plot(
-        comparator["month"],
-        comparator["official_cumulative"],
+        comparison_official_part["month"],
+        comparison_official_part["official_cumulative"],
         color=COLORS["comparison"],
         marker="o",
         linewidth=3,
         markersize=7,
     )
+    comparison_provisional_total = int(
+        comparison_rows["record_status"].eq("provisional").sum()
+    )
+    if (
+        comparison_provisional_total
+        and latest_comparison_month > latest_comparison_official_month
+    ):
+        comparison_provisional_part = comparator[
+            comparator["month"].between(
+                latest_comparison_official_month, latest_comparison_month
+            )
+        ].copy()
+        comparison_provisional_part.loc[
+            comparison_provisional_part["month"].eq(latest_comparison_official_month),
+            "combined_cumulative",
+        ] = int(comparison_official_part.iloc[-1]["official_cumulative"])
+        ax.plot(
+            comparison_provisional_part["month"],
+            comparison_provisional_part["combined_cumulative"],
+            color=COLORS["comparison"],
+            marker="o",
+            markerfacecolor=COLORS["paper"],
+            linestyle="--",
+            linewidth=3,
+            markersize=7,
+        )
     official_part = current_official[current_official["month"].le(latest_official_month)]
     ax.plot(
         official_part["month"],
@@ -75,7 +121,7 @@ def write_matplotlib_fallback(
         )
 
     current_mix = mode_counts(current_rows)
-    comparison_mix = mode_counts(official, comparison_year)
+    comparison_mix = mode_counts(comparison_rows, comparison_year)
     positions = [latest_month + 0.25, 13.15]
     bottoms = [0, 0]
     for mode in MODE_ORDER:
@@ -111,11 +157,26 @@ def write_matplotlib_fallback(
         bottoms = [bottoms[i] + values[i] for i in range(2)]
 
     current_total = len(current_rows)
-    comparison_total = len(official[official["year"].eq(comparison_year)])
+    current_provisional_total = int(current_rows["record_status"].eq("provisional").sum())
+    comparison_total = len(comparison_rows)
+    current_total_label = (
+        f"official + provisional = {current_total}"
+        if current_provisional_total
+        else f"total = {current_total}"
+        if is_complete_year(combined, current_year)
+        else f"official = {current_total}"
+    )
+    comparison_total_label = (
+        f"official + provisional = {comparison_total}"
+        if comparison_provisional_total
+        else f"total = {comparison_total}"
+        if is_complete_year(combined, comparison_year)
+        else f"official = {comparison_total}"
+    )
     ax.text(
         positions[0],
         current_total + 0.7,
-        f"{as_of:%b. %-d, %Y}\nofficial + provisional = {current_total}",
+        f"{coverage_label(combined, current_year, as_of)}\n{current_total_label}",
         ha="center",
         va="bottom",
         color=COLORS["current"],
@@ -125,7 +186,7 @@ def write_matplotlib_fallback(
     ax.text(
         positions[1],
         comparison_total + 0.7,
-        f"Dec. {comparison_year}\ntotal = {comparison_total}",
+        f"{coverage_label(combined, comparison_year, as_of)}\n{comparison_total_label}",
         ha="center",
         va="bottom",
         color=COLORS["comparison"],
@@ -170,7 +231,8 @@ def write_matplotlib_fallback(
     fig.text(
         0.02,
         0.862,
-        f"Source: SFDPH/SFPD/SFMTA via DataSF; provisional reports checked {as_of:%B %-d, %Y}.",
+        "Source: SFDPH/SFPD/SFMTA via DataSF; "
+        f"focus-year coverage through {coverage_label(combined, current_year, as_of)}.",
         fontsize=12,
         color=COLORS["muted"],
         style="italic",
@@ -179,11 +241,23 @@ def write_matplotlib_fallback(
     legend_handles = [
         Line2D(
             [0], [0], color=COLORS["comparison"], marker="o", lw=3,
-            label=f"{comparison_year} (full year = {comparison_total})",
+            label=(
+                f"{comparison_year} tracked = {comparison_total}"
+                if comparison_provisional_total
+                else f"{comparison_year} full year = {comparison_total}"
+                if is_complete_year(combined, comparison_year)
+                else f"{comparison_year} official = {comparison_total}"
+            ),
         ),
         Line2D(
             [0], [0], color=COLORS["current"], marker="o", lw=3,
-            label=f"{current_year} official ({len(official_rows)})",
+            label=(
+                f"{current_year} tracked = {current_total}"
+                if current_provisional_total
+                else f"{current_year} full year = {current_total}"
+                if is_complete_year(combined, current_year)
+                else f"{current_year} official = {current_total}"
+            ),
         ),
         Line2D(
             [0], [0], color=COLORS["current"], marker="o",
