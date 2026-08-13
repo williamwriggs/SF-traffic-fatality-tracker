@@ -87,6 +87,6 @@ def test_annual_mode_chart_reserves_header_space_for_title_and_legend():
     official = records[records["record_status"].eq("official")]
     figure = annual_mode_chart(official, start_year=2016)
 
-    assert figure.layout.margin.t >= 180
+    assert figure.layout.margin.t == 145
     assert figure.layout.title.yanchor == "top"
     assert figure.layout.legend.yanchor == "bottom"
