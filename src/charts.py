@@ -449,7 +449,6 @@ def annual_mode_chart(
             "yanchor": "top",
         },
         bargap=0.22,
-        margin={"l": 55, "r": 35, "t": 145, "b": 65},
         legend={
             "orientation": "h",
             "yanchor": "bottom",
