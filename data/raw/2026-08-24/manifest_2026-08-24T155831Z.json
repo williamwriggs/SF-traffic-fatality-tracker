@@ -1,0 +1,9 @@
+{
+  "dataset_id": "dau3-4s8f",
+  "dataset_name": "Traffic Crashes Resulting in Fatality",
+  "dataset_url": "https://data.sfgov.org/resource/dau3-4s8f.json",
+  "fetched_at": "2026-08-24T15:58:31+00:00",
+  "row_count": 366,
+  "metadata_rows_updated_at": 1785185318,
+  "metadata_rows_updated_by": "dbag-6qd9"
+}
