@@ -1,6 +1,10 @@
 # SF Traffic Fatality Tracker
 
-An open-source, revision-aware tracker for traffic fatalities in San Francisco. It fetches the City’s official Vision Zero fatality records from DataSF, preserves every source snapshot, keeps recent public reports separate until reconciliation, and serves a Vercel-hosted Next.js dashboard for year-to-year comparison and downloads. The original Streamlit interface remains available during the migration period.
+**Live dashboard:** [sf-traffic-fatality-tracker.vercel.app](https://sf-traffic-fatality-tracker.vercel.app/)
+
+**Current release:** Vercel web edition, launched September 4, 2026
+
+An open-source, revision-aware tracker for traffic fatalities in San Francisco. It fetches the City’s official Vision Zero fatality records from DataSF, preserves every source snapshot, keeps recent public reports separate until reconciliation, and serves a permanent Vercel-hosted Next.js dashboard for year-to-year comparison and downloads. The original Streamlit application is retained as a legacy interface, not the primary deployment.
 
 Research by **William W. Riggs**. Source code, methodology, and revision history are maintained in this repository.
 
@@ -9,6 +13,19 @@ The tracker is designed for journalists, researchers, students, and residents wh
 ![Generated publication chart](assets/generated_2017_vs_2026.png)
 
 The supplied visual is retained as `assets/reference_chart.png`; the image above is regenerated from the stored official and provisional records.
+
+## Current deployment
+
+The primary public version is the [Vercel web edition](https://sf-traffic-fatality-tracker.vercel.app/), deployed from the `web/` application in this repository. It adds a responsive interface, two-year and multi-year cumulative comparisons, a 100%-normalized mode view, record and map exploration, CSV downloads, and browser-based comparison of any two stored snapshots.
+
+The deployment separates presentation from data collection:
+
+- the Python pipeline queries DataSF, validates and normalizes records, stores immutable Parquet snapshots, and records revisions;
+- GitHub Actions runs that pipeline daily and exports browser-ready JSON to `web/public/data/`;
+- the Vercel application loads the latest published tracker payload and requested snapshots from the repository at runtime, so data refreshes do not require a frontend rebuild;
+- unreconciled public reports remain visibly separate from official City records throughout the interface.
+
+The Vercel project is `sf-traffic-fatality-tracker` in William Riggs’ personal Vercel workspace. Production uses the stable `sf-traffic-fatality-tracker.vercel.app` domain; timestamped deployment URLs are build artifacts rather than the canonical public address. The former [Streamlit deployment](https://sf-traffic-fatality-tracker.streamlit.app/) remains available only as a legacy reference.
 
 ## What it does
 
@@ -32,6 +49,21 @@ That dedicated view is now canonical. The victim-level table remains a useful cr
 
 ## Run locally
 
+### Vercel web edition
+
+The production interface lives in `web/` and uses the processed snapshots exported by the Python pipeline.
+
+```bash
+python scripts/export_web_data.py
+cd web
+pnpm install
+pnpm dev
+```
+
+Open `http://localhost:3000`. The exported app is fully static: the current dashboard payload is written to `web/public/data/tracker.json`, while individual immutable snapshots are written separately and loaded only when requested.
+
+### Data pipeline and legacy Streamlit interface
+
 Python 3.11 or newer is required.
 
 ```bash
@@ -43,19 +75,6 @@ streamlit run app.py
 ```
 
 Then open the local URL printed by Streamlit, normally `http://localhost:8501`.
-
-### Next.js dashboard
-
-The production web interface lives in `web/` and uses the same processed snapshots as the Python application.
-
-```bash
-python scripts/export_web_data.py
-cd web
-pnpm install
-pnpm dev
-```
-
-Open `http://localhost:3000`. The exported app is fully static: the current dashboard payload is written to `web/public/data/tracker.json`, while individual immutable snapshots are written separately and loaded only when requested.
 
 A Socrata token is optional for low-volume use. For more generous API limits:
 
@@ -160,7 +179,7 @@ Plotly’s camera control exports any visible chart from the browser. Every char
 
 The production dashboard is deployed from the `web/` root directory on Vercel. It loads the latest tracker payload and requested immutable snapshots from the `main` branch at runtime, so the scheduled refresh becomes visible without rebuilding the site. Connecting the Vercel project to this GitHub repository additionally enables preview deployments for pull requests and automatic production deployments for code changes merged to `main`.
 
-The legacy Streamlit deployment can continue serving `app.py` during migration. Once the Vercel application reaches feature parity and a permanent domain is attached, it can be retired or changed to a migration notice.
+The Streamlit deployment and `app.py` remain available as a legacy reference. New public links should point to the Vercel application.
 
 ## Testing
 

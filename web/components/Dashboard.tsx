@@ -23,6 +23,8 @@ import {
 const REPOSITORY = "https://github.com/williamwriggs/SF-traffic-fatality-tracker";
 const DATASF = "https://data.sfgov.org/Public-Safety/Traffic-Crashes-Resulting-in-Fatality/dau3-4s8f";
 const LIVE_DATA = "https://raw.githubusercontent.com/williamwriggs/SF-traffic-fatality-tracker/main/web/public/data";
+const DEPLOYMENT = "https://sf-traffic-fatality-tracker.vercel.app/";
+const LEGACY_STREAMLIT = "https://sf-traffic-fatality-tracker.streamlit.app/";
 
 type Tab = "overview" | "explore" | "revisions" | "methodology";
 
@@ -298,7 +300,7 @@ export default function Dashboard({ initialData }: { initialData: TrackerData })
 
       <main id="top">
         <header className="hero-copy">
-          <p className="eyebrow">Public data · revision aware · open source</p>
+          <p className="eyebrow">Vercel web edition · public data · revision aware</p>
           <h1>SF Traffic Fatality Tracker</h1>
           <p className="lede">Compare years, inspect mode and location, and download exactly what changed between DataSF snapshots. Unreconciled recent deaths stay visible without being silently counted as official.</p>
           <p className="credit">Research by <strong>William W. Riggs</strong> · <a href={REPOSITORY} target="_blank" rel="noreferrer">Source and methodology on GitHub ↗</a></p>
@@ -327,7 +329,7 @@ export default function Dashboard({ initialData }: { initialData: TrackerData })
             ["overview", "Overview"],
             ["explore", "Explore records"],
             ["revisions", "Snapshots & revisions"],
-            ["methodology", "Methodology"],
+            ["methodology", "About & methods"],
           ] as [Tab, string][]).map(([value, label]) => (
             <button key={value} role="tab" aria-selected={tab === value} className={tab === value ? "active" : ""} onClick={() => setTab(value)}>{label}</button>
           ))}
@@ -462,8 +464,18 @@ export default function Dashboard({ initialData }: { initialData: TrackerData })
 
         {tab === "methodology" && (
           <article className="methodology content-card">
-            <p className="eyebrow">Methods and definitions</p>
-            <h2>How the tracker works</h2>
+            <p className="eyebrow">About this project</p>
+            <h2>Independent research, now on Vercel</h2>
+            <div className="release-card">
+              <div>
+                <span className="release-label">Current public release</span>
+                <strong>Vercel web edition</strong>
+              </div>
+              <p>Launched September 4, 2026 as the tracker’s primary public interface. The <a href={LEGACY_STREAMLIT} target="_blank" rel="noreferrer">original Streamlit application</a> is retained as a legacy reference.</p>
+              <a className="button secondary compact" href={DEPLOYMENT}>Open the production deployment ↗</a>
+            </div>
+            <section><h3>Research and source code</h3><p>This is an independent research and transparency project by <strong>William W. Riggs</strong>. Its source code, data-processing methods, revision history, and MIT License are available in the <a href={REPOSITORY} target="_blank" rel="noreferrer">public GitHub repository</a>.</p></section>
+            <section><h3>How the web edition stays current</h3><p>The interface is a static Next.js application hosted on Vercel. A daily GitHub Actions workflow runs the Python ingestion pipeline, stores immutable snapshots, and exports browser-ready JSON. The site reads the latest published payload and requested snapshots from the repository at runtime, so new data can appear without rebuilding the frontend.</p></section>
             <section><h3>What counts as official</h3><p>The canonical source is DataSF’s <a href={DATASF} target="_blank" rel="noreferrer">Traffic Crashes Resulting in Fatality dataset</a> (<code>dau3-4s8f</code>). Year-to-date records originate with the Office of the Chief Medical Examiner and include cases City agencies determine meet the San Francisco Vision Zero Fatality Protocol.</p></section>
             <section><h3>Collision date versus death date</h3><p>Charts group deaths by collision date for year-to-year comparability. Death date remains in every record and download. A person may die days after a collision; that is not treated as a date correction.</p></section>
             <section><h3>Official versus provisional</h3><p>A provisional record is a credible public report that has not yet been matched to an official DataSF row. It is drawn with a dashed line and excluded from the official KPI. Candidate matches are flagged for review but never auto-reconciled.</p></section>
@@ -475,7 +487,7 @@ export default function Dashboard({ initialData }: { initialData: TrackerData })
 
         <footer>
           <p>Snapshot fetched {longDate(trackerData.status.fetched_at)}. Research by William W. Riggs. <a href={REPOSITORY} target="_blank" rel="noreferrer">Source code and methodology</a> are released under the MIT License.</p>
-          <p>Values can change when City agencies reconcile records.</p>
+          <p><a href={DEPLOYMENT}>Vercel web edition</a> · launched September 4, 2026. Values can change when City agencies reconcile records.</p>
         </footer>
       </main>
     </div>

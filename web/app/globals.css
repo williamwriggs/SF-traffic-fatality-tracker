@@ -183,6 +183,11 @@ tbody tr:nth-child(even) { background: #faf9f6; }
 .methodology section { margin-top: 30px; }
 .methodology h3 { margin: 0 0 8px; font-size: 1.15rem; }
 .methodology p { color: #4f555a; line-height: 1.65; }
+.release-card { display: grid; grid-template-columns: minmax(180px, .7fr) minmax(260px, 1.5fr) auto; align-items: center; gap: 24px; margin: 26px 0 34px; padding: 22px; background: var(--paper); border: 1px solid var(--line); border-left: 4px solid var(--blue); }
+.release-card > div { display: grid; gap: 4px; }
+.release-card strong { font-size: 1.15rem; }
+.release-card p { margin: 0; }
+.release-label { color: var(--muted); font-size: .68rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 .warning-box { margin: 30px 0; padding: 18px; background: #f6eadf; border-left: 4px solid var(--orange); line-height: 1.55; }
 code { padding: 2px 5px; background: var(--surface-muted); border-radius: 4px; font-size: .88em; }
 
@@ -206,6 +211,7 @@ footer p { margin: 0; }
   .metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 12px; }
   .metrics-grid .metric:last-child { grid-column: 1 / -1; }
   .chart-card, .content-card, .filter-card, .mix-card { padding: 17px; border-radius: 10px; }
+  .release-card { grid-template-columns: 1fr; gap: 14px; }
   .chart-heading, .section-heading { align-items: stretch; flex-direction: column; gap: 12px; }
   .chart-heading .toggle-row { align-self: flex-start; }
   .two-column { grid-template-columns: 1fr; }
