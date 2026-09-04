@@ -27,6 +27,10 @@ PROVISIONAL_COLUMNS = [
     "notes",
 ]
 
+OPEN_STATUSES = {"unreconciled", "provisional", "under-review"}
+TERMINAL_STATUSES = {"reconciled", "excluded", "duplicate", "withdrawn"}
+ALLOWED_STATUSES = OPEN_STATUSES | TERMINAL_STATUSES
+
 
 def load_provisional(path: Path) -> pd.DataFrame:
     if not path.exists():
@@ -42,6 +46,21 @@ def load_provisional(path: Path) -> pd.DataFrame:
         frame[col] = pd.to_datetime(frame[col], errors="coerce")
     for col in ("latitude", "longitude"):
         frame[col] = pd.to_numeric(frame[col], errors="coerce")
+    status = frame["status"].fillna("").str.strip().str.lower()
+    unknown_status = ~status.isin(ALLOWED_STATUSES)
+    if unknown_status.any():
+        values = sorted(status[unknown_status].unique())
+        raise ValueError(f"Unknown provisional status values: {values}")
+    frame["status"] = status
+    matched = frame["matched_official_record_id"].fillna("").str.strip().ne("")
+    reconciled = status.eq("reconciled")
+    invalid_reconciliation = matched.ne(reconciled)
+    if invalid_reconciliation.any():
+        ids = frame.loc[invalid_reconciliation, "provisional_id"].astype(str).tolist()
+        raise ValueError(
+            "Reconciled provisional rows require both status='reconciled' and "
+            f"matched_official_record_id; invalid rows: {ids}"
+        )
     missing_mode = frame["normalized_mode"].isna() | frame["normalized_mode"].eq("")
     frame.loc[missing_mode, "normalized_mode"] = [
         normalize_mode(value, value) for value in frame.loc[missing_mode, "mode_reported"]
@@ -53,10 +72,8 @@ def as_tracker_records(provisional: pd.DataFrame, ingested_at: pd.Timestamp) -> 
     """Shape open provisional incidents like official records for analysis."""
     if provisional.empty:
         return pd.DataFrame()
-    open_statuses = {"unreconciled", "provisional", "under-review"}
     current = provisional[
-        provisional["status"].fillna("").str.lower().isin(open_statuses)
-        & provisional["matched_official_record_id"].isna()
+        provisional["status"].fillna("").str.lower().isin(OPEN_STATUSES)
     ].copy()
     if current.empty:
         return pd.DataFrame()

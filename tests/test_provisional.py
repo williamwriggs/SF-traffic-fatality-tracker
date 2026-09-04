@@ -1,6 +1,7 @@
 import pandas as pd
+import pytest
 
-from src.provisional import as_tracker_records
+from src.provisional import as_tracker_records, load_provisional
 
 
 def test_explicitly_reconciled_provisional_record_does_not_count():
@@ -40,3 +41,44 @@ def test_explicitly_reconciled_provisional_record_does_not_count():
     )
     result = as_tracker_records(provisional, pd.Timestamp("2026-08-12"))
     assert list(result["record_id"]) == ["provisional:open"]
+
+
+@pytest.mark.parametrize(
+    ("status", "matched_id"),
+    [("reconciled", None), ("unreconciled", "official-1")],
+)
+def test_load_provisional_rejects_incomplete_reconciliation_pair(
+    tmp_path, status, matched_id
+):
+    path = tmp_path / "incidents.csv"
+    pd.DataFrame(
+        [
+            {
+                "provisional_id": "candidate",
+                "incident_date": "2026-07-01",
+                "mode_reported": "Pedestrian",
+                "status": status,
+                "matched_official_record_id": matched_id,
+            }
+        ]
+    ).to_csv(path, index=False)
+
+    with pytest.raises(ValueError, match="require both"):
+        load_provisional(path)
+
+
+def test_load_provisional_rejects_unknown_status(tmp_path):
+    path = tmp_path / "incidents.csv"
+    pd.DataFrame(
+        [
+            {
+                "provisional_id": "candidate",
+                "incident_date": "2026-07-01",
+                "mode_reported": "Pedestrian",
+                "status": "maybe",
+            }
+        ]
+    ).to_csv(path, index=False)
+
+    with pytest.raises(ValueError, match="Unknown provisional status"):
+        load_provisional(path)

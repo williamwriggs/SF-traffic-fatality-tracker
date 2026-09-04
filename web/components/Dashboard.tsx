@@ -25,6 +25,8 @@ const DATASF = "https://data.sfgov.org/Public-Safety/Traffic-Crashes-Resulting-i
 const LIVE_DATA = "https://raw.githubusercontent.com/williamwriggs/SF-traffic-fatality-tracker/main/web/public/data";
 const DEPLOYMENT = "https://sf-traffic-fatality-tracker.vercel.app/";
 const LEGACY_STREAMLIT = "https://sf-traffic-fatality-tracker.streamlit.app/";
+const PROTOCOL = "https://www.visionzerosf.org/wp-content/uploads/2024/02/Vision-Zero-Traffic-Fatality-Protocol_2020_6.2.pdf";
+const YEAR_END_REPORT = "https://www.visionzerosf.org/wp-content/uploads/2025/08/Vision-Zero-2024-End-of-Year-Traffic-Fatality-Report.pdf";
 
 type Tab = "overview" | "explore" | "revisions" | "methodology";
 
@@ -191,6 +193,14 @@ export default function Dashboard({ initialData }: { initialData: TrackerData })
     .sort()
     .at(-1);
   const openProvisional = trackerData.records.filter((record) => record.record_status === "provisional").length;
+  const provisionalReviewAge = Math.max(
+    0,
+    Math.floor(
+      (Date.parse(trackerData.status.fetched_at.slice(0, 10)) -
+        Date.parse(trackerData.status.provisional_checked_through.slice(0, 10))) /
+        86_400_000,
+    ),
+  );
   const chartYears = view === "detail" ? [comparisonYear, focusYear] : multiYears;
   const chartRows = records.filter((record) => chartYears.includes(record.year));
 
@@ -310,6 +320,7 @@ export default function Dashboard({ initialData }: { initialData: TrackerData })
           <span>Official records currently include collisions through <strong>{longDate(latestOfficial)}</strong> and were loaded to DataSF <strong>{shortDate(trackerData.status.source_loaded_at)}</strong>.</span>
           <span className="status-pill">{openProvisional} unreconciled public reports</span>
           <span>checked through {longDate(trackerData.status.provisional_checked_through)}.</span>
+          {provisionalReviewAge > 7 && <span className="status-pill stale">Manual provisional review is {provisionalReviewAge} days behind this data pull.</span>}
         </div>
 
         <section className="metrics-grid" aria-label="Summary metrics">
@@ -343,7 +354,7 @@ export default function Dashboard({ initialData }: { initialData: TrackerData })
               action={<button className="button secondary compact" onClick={() => downloadText(`sf-traffic-fatalities-${chartYears.join("-")}.csv`, toCsv(chartRows as unknown as Record<string, unknown>[]))}>Download CSV</button>}
             >
               <HeroChart records={records} focusYear={focusYear} comparisonYear={comparisonYear} multiYears={multiYears} view={view} />
-              <p className="source-note">Source: SFDPH/SFPD/SFMTA via DataSF. Solid lines are official; dashed segments are unreconciled.</p>
+              <p className="source-note">Source: Vision Zero SF / TransBASE via DataSF; pulled {longDate(trackerData.status.fetched_at)}. Solid lines are official; dashed segments are unreconciled.</p>
             </ChartCard>
 
             <div className="two-column">
@@ -362,10 +373,11 @@ export default function Dashboard({ initialData }: { initialData: TrackerData })
 
             <ChartCard
               title="Annual traffic fatalities by mode"
-              subtitle={normalized ? "Mode share within each year · each bar = 100% · latest year may be partial" : "Official victim-level DataSF records · latest year may be partial"}
+              subtitle={normalized ? "Mode share within each year · each bar = 100% · latest year may be partial" : "Current official DataSF extract · one row per deceased person · latest year may be partial"}
               action={<Toggle checked={normalized} onChange={setNormalized} label="Normalize to 100%" />}
             >
               <AnnualModeChart records={trackerData.records} normalized={normalized} />
+              <p className="source-note">Extract totals can differ from final annual reports: the current DataSF table contains 29 fatalities for 2016, while SFDPH’s 2024 year-end report lists 32.</p>
             </ChartCard>
 
             <ChartCard title="Monthly seasonality" subtitle="Official fatalities by collision month">
@@ -476,17 +488,18 @@ export default function Dashboard({ initialData }: { initialData: TrackerData })
             </div>
             <section><h3>Research and source code</h3><p>This is an independent research and transparency project by <strong>William W. Riggs</strong>. Its source code, data-processing methods, revision history, and MIT License are available in the <a href={REPOSITORY} target="_blank" rel="noreferrer">public GitHub repository</a>.</p></section>
             <section><h3>How the web edition stays current</h3><p>The interface is a static Next.js application hosted on Vercel. A daily GitHub Actions workflow runs the Python ingestion pipeline, stores immutable snapshots, and exports browser-ready JSON. The site reads the latest published payload and requested snapshots from the repository at runtime, so new data can appear without rebuilding the frontend.</p></section>
-            <section><h3>What counts as official</h3><p>The canonical source is DataSF’s <a href={DATASF} target="_blank" rel="noreferrer">Traffic Crashes Resulting in Fatality dataset</a> (<code>dau3-4s8f</code>). Year-to-date records originate with the Office of the Chief Medical Examiner and include cases City agencies determine meet the San Francisco Vision Zero Fatality Protocol.</p></section>
-            <section><h3>Collision date versus death date</h3><p>Charts group deaths by collision date for year-to-year comparability. Death date remains in every record and download. A person may die days after a collision; that is not treated as a date correction.</p></section>
-            <section><h3>Official versus provisional</h3><p>A provisional record is a credible public report that has not yet been matched to an official DataSF row. It is drawn with a dashed line and excluded from the official KPI. Candidate matches are flagged for review but never auto-reconciled.</p></section>
-            <section><h3>Modes and revisions</h3><p>The tracker preserves DataSF’s native role and vehicle values and adds a transparent display taxonomy. Every refresh stores timestamped raw data and a normalized Parquet snapshot. Additions, removals, date changes, location changes, and mode reclassifications are retained in the revision log.</p></section>
-            <div className="warning-box">Provisional public reports may later be excluded under the City protocol or reclassified. This is an independent research and transparency tool, not an official City publication.</div>
+            <section><h3>Unit and official scope</h3><p>The canonical source is DataSF’s <a href={DATASF} target="_blank" rel="noreferrer">Traffic Crashes Resulting in Fatality dataset</a> (<code>dau3-4s8f</code>). Each row represents a deceased person, so one crash can contribute more than one fatality. Year-to-date records originate with the Office of the Chief Medical Examiner and include cases City agencies determine meet the <a href={PROTOCOL} target="_blank" rel="noreferrer">San Francisco Vision Zero Fatality Protocol</a>. The protocol generally covers a death within 30 days of a crash in San Francisco’s public right-of-way; most freeway, Presidio, and SFO cases are outside the official total.</p></section>
+            <section><h3>Dates and freshness</h3><p>Charts group fatalities by collision date; death date remains in every record and download. DataSF publishes this table quarterly, while this tracker checks it daily. The interface distinguishes the tracker pull, portal load, latest published collision, row-level <code>data_as_of</code>, and manual provisional check dates. A daily check does not make the City source—or the curated provisional layer—real time.</p></section>
+            <section><h3>Official versus provisional</h3><p>The provisional layer is a small, manually curated set of public reports with an identifiable incident, date, mode, location, durable source, and review date. It is not an exhaustive census of recent deaths. Open reports are drawn with a dashed line and excluded from the official KPI. Candidate matches use date and mode only to flag review; they never auto-reconcile. A reconciled row requires both <code>status=reconciled</code> and a matched official record ID.</p></section>
+            <section><h3>Modes and revisions</h3><p>The tracker preserves DataSF’s native deceased-mode and collision-type values and adds a display taxonomy. Mopeds remain in Other / Unresolved pending an explicit taxonomy decision. Every successful refresh stores timestamped raw data and a normalized Parquet snapshot. Revisions are compared by stable record ID; coordinate differences smaller than <code>0.000001°</code> are treated as serialization noise rather than location changes.</p></section>
+            <section><h3>Comparability and uncertainty</h3><p>Annual values are counts from the current DataSF extract, not frozen copies of each year’s final report. The extract currently reports 29 fatalities for 2016; <a href={YEAR_END_REPORT} target="_blank" rel="noreferrer">SFDPH’s 2024 year-end report</a> lists 32. The tracker preserves that discrepancy instead of silently substituting a value. Small annual counts can fluctuate substantially and do not, by themselves, establish a causal trend.</p></section>
+            <div className="warning-box">Provisional public reports may be incomplete, duplicated, excluded under the City protocol, or reclassified. This is an independent research and transparency tool, not an official City publication.</div>
             <p>Additional sources: <a href="https://www.sf.gov/data--traffic-fatalities" target="_blank" rel="noreferrer">SF.gov traffic fatalities</a> and the <a href="https://data.sfgov.org/d/nwes-mmgh" target="_blank" rel="noreferrer">DataSF victim-level cross-check</a>.</p>
           </article>
         )}
 
         <footer>
-          <p>Snapshot fetched {longDate(trackerData.status.fetched_at)}. Research by William W. Riggs. <a href={REPOSITORY} target="_blank" rel="noreferrer">Source code and methodology</a> are released under the MIT License.</p>
+          <p>Vision Zero SF / TransBASE via DataSF; pulled {longDate(trackerData.status.fetched_at)}. Research by William W. Riggs. <a href={REPOSITORY} target="_blank" rel="noreferrer">Source code and methodology</a> are released under the MIT License.</p>
           <p><a href={DEPLOYMENT}>Vercel web edition</a> · launched September 4, 2026. Values can change when City agencies reconcile records.</p>
         </footer>
       </main>

@@ -15,6 +15,7 @@ from src.provisional import as_tracker_records, flag_possible_matches, load_prov
 from src.reconcile import append_revision_log, compare_snapshots, snapshot_files
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+MIN_SNAPSHOT_RETENTION = 0.8
 
 
 def _atomic_parquet(frame: pd.DataFrame, path: Path) -> None:
@@ -22,6 +23,18 @@ def _atomic_parquet(frame: pd.DataFrame, path: Path) -> None:
     temporary = path.with_suffix(path.suffix + ".tmp")
     frame.to_parquet(temporary, index=False)
     temporary.replace(path)
+
+
+def _validate_snapshot_transition(previous: pd.DataFrame, current: pd.DataFrame) -> None:
+    """Stop a likely truncated response from replacing the last good snapshot."""
+    if previous.empty:
+        return
+    retention = len(current) / len(previous)
+    if retention < MIN_SNAPSHOT_RETENTION:
+        raise DataSFError(
+            "DataSF snapshot volume fell from "
+            f"{len(previous)} to {len(current)} records ({retention:.1%} retained)"
+        )
 
 
 def refresh(data_dir: Path, start_year: int = 2014) -> dict[str, object]:
@@ -38,6 +51,8 @@ def refresh(data_dir: Path, start_year: int = 2014) -> dict[str, object]:
 
     try:
         result = client.fetch_fatal_victims(start_year=start_year)
+        official = normalize_fatal_victims(result.rows, result.fetched_at)
+        _validate_snapshot_transition(prior, official)
     except DataSFError as exc:
         status_path = processed_dir / "status.json"
         old_status = json.loads(status_path.read_text()) if status_path.exists() else {}
@@ -52,7 +67,6 @@ def refresh(data_dir: Path, start_year: int = 2014) -> dict[str, object]:
         raise
 
     raw_path, manifest_path = write_raw_snapshot(result, data_dir)
-    official = normalize_fatal_victims(result.rows, result.fetched_at)
     stamp = result.fetched_at.strftime("%Y%m%dT%H%M%SZ")
     snapshot_path = snapshots_dir / f"fatalities_{stamp}.parquet"
     _atomic_parquet(official, snapshot_path)

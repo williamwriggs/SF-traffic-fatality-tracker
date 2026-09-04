@@ -66,10 +66,15 @@ export function coverageDate(
   includeProvisional: boolean,
 ): Date {
   if (isCompleteYear(records, year)) return new Date(Date.UTC(year, 11, 31, 12));
-  const source = includeProvisional
-    ? status.provisional_checked_through
-    : status.source_data_as_of;
-  return dateOnly(source || status.fetched_at);
+  if (includeProvisional && status.provisional_checked_through) {
+    return dateOnly(status.provisional_checked_through);
+  }
+  const latestOfficialCollision = records
+    .filter((record) => record.year === year && record.record_status === "official")
+    .map((record) => record.collision_date)
+    .sort()
+    .at(-1);
+  return dateOnly(latestOfficialCollision || status.fetched_at);
 }
 
 export function filterThrough(records: FatalityRecord[], end: Date): FatalityRecord[] {
@@ -210,6 +215,21 @@ const TRACKED_FIELDS: (keyof SnapshotRecord)[] = [
   "classification_status",
 ];
 
+const COORDINATE_TOLERANCE = 1e-6;
+
+function snapshotValuesEqual(field: keyof SnapshotRecord, before: unknown, after: unknown): boolean {
+  if ((before === null || before === undefined) && (after === null || after === undefined)) return true;
+  if (before === null || before === undefined || after === null || after === undefined) return false;
+  if (field === "latitude" || field === "longitude") {
+    const beforeNumber = Number(before);
+    const afterNumber = Number(after);
+    if (Number.isFinite(beforeNumber) && Number.isFinite(afterNumber)) {
+      return Math.abs(beforeNumber - afterNumber) <= COORDINATE_TOLERANCE;
+    }
+  }
+  return String(before ?? "") === String(after ?? "");
+}
+
 export function compareSnapshots(previous: SnapshotRecord[], current: SnapshotRecord[]): SnapshotChange[] {
   const before = new Map(previous.map((record) => [record.record_id, record]));
   const after = new Map(current.map((record) => [record.record_id, record]));
@@ -228,9 +248,9 @@ export function compareSnapshots(previous: SnapshotRecord[], current: SnapshotRe
     const newRecord = after.get(id);
     if (!newRecord) continue;
     for (const field of TRACKED_FIELDS) {
-      const oldValue = oldRecord[field] ?? "";
-      const newValue = newRecord[field] ?? "";
-      if (String(oldValue) === String(newValue)) continue;
+      const oldValue = oldRecord[field];
+      const newValue = newRecord[field];
+      if (snapshotValuesEqual(field, oldValue, newValue)) continue;
       const changeType =
         field.includes("mode") || field.includes("victim") || field.includes("vehicle") || field === "native_party_type"
           ? "mode_reclassification"
@@ -243,8 +263,8 @@ export function compareSnapshots(previous: SnapshotRecord[], current: SnapshotRe
         record_id: id,
         change_type: changeType,
         field,
-        old_value: String(oldValue),
-        new_value: String(newValue),
+        old_value: String(oldValue ?? ""),
+        new_value: String(newValue ?? ""),
       });
     }
   }

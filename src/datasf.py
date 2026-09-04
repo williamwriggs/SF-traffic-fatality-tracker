@@ -67,6 +67,10 @@ def normalize_mode(victim_role: object, party_type: object, vehicle_type: object
         return "While Riding a Motorcycle"
     if "driver" in primary or "passenger" in primary:
         return "While Driving / Riding"
+    # DataSF exposes Moped as its own deceased-mode value. Keep it separate until
+    # the display taxonomy has an explicit, documented treatment for mopeds.
+    if "moped" in primary:
+        return "Other / Unresolved"
     if "bicycl" in fallback or "bike" in fallback:
         return "While Cycling"
     if "scooter" in fallback or "standup" in fallback:
@@ -134,17 +138,32 @@ def write_raw_snapshot(result: FetchResult, data_dir: Path) -> tuple[Path, Path]
 def normalize_fatal_victims(rows: list[dict[str, Any]], fetched_at: datetime) -> pd.DataFrame:
     raw = pd.DataFrame(rows)
     if raw.empty:
-        return pd.DataFrame()
+        raise DataSFError("DataSF returned an empty fatality dataset")
     required = {"unique_id", "collision_date", "deceased"}
     missing = required.difference(raw.columns)
     if missing:
         raise DataSFError(f"Required DataSF columns missing: {sorted(missing)}")
 
+    blank_ids = raw["unique_id"].isna() | raw["unique_id"].astype("string").str.strip().eq("")
+    if blank_ids.any():
+        raise DataSFError(f"DataSF returned {int(blank_ids.sum())} rows without unique_id")
+    duplicate_ids = raw["unique_id"].astype("string").duplicated(keep=False)
+    if duplicate_ids.any():
+        examples = sorted(raw.loc[duplicate_ids, "unique_id"].astype(str).unique())[:5]
+        raise DataSFError(f"DataSF returned duplicate unique_id values: {examples}")
+
+    dates = pd.to_datetime(raw["collision_date"], errors="coerce")
+    invalid_dates = dates.isna()
+    if invalid_dates.any():
+        raise DataSFError(f"DataSF returned {int(invalid_dates.sum())} invalid collision dates")
+    blank_modes = raw["deceased"].isna() | raw["deceased"].astype("string").str.strip().eq("")
+    if blank_modes.any():
+        raise DataSFError(f"DataSF returned {int(blank_modes.sum())} rows without deceased mode")
+
     for col in SELECT_FIELDS:
         if col not in raw.columns:
             raw[col] = pd.NA
 
-    dates = pd.to_datetime(raw["collision_date"], errors="coerce", utc=True)
     lat = pd.to_numeric(raw["latitude"], errors="coerce")
     lon = pd.to_numeric(raw["longitude"], errors="coerce")
 
@@ -154,10 +173,10 @@ def normalize_fatal_victims(rows: list[dict[str, Any]], fetched_at: datetime) ->
             "crash_id": raw["case_id_fkey"].astype("string"),
             "person_id": raw["unique_id"].astype("string"),
             "collision_datetime": pd.to_datetime(
-                raw["collision_datetime"], errors="coerce", utc=True
+                raw["collision_datetime"], errors="coerce"
             ),
-            "collision_date": dates.dt.tz_localize(None),
-            "death_date": pd.to_datetime(raw["death_date"], errors="coerce", utc=True).dt.tz_localize(None),
+            "collision_date": dates,
+            "death_date": pd.to_datetime(raw["death_date"], errors="coerce"),
             "year": dates.dt.year.astype("Int64"),
             "month": dates.dt.month.astype("Int64"),
             "native_party_type": raw["deceased"].astype("string"),
@@ -178,11 +197,11 @@ def normalize_fatal_victims(rows: list[dict[str, Any]], fetched_at: datetime) ->
             "police_district": raw["police_district"].astype("string"),
             "source_dataset": DATASET_ID,
             "source_updated_at": pd.to_datetime(
-                raw["data_as_of"], errors="coerce", utc=True
-            ).dt.tz_localize(None),
+                raw["data_as_of"], errors="coerce"
+            ),
             "source_loaded_at": pd.to_datetime(
-                raw["data_loaded_at"], errors="coerce", utc=True
-            ).dt.tz_localize(None),
+                raw["data_loaded_at"], errors="coerce"
+            ),
             "tracker_ingested_at": pd.Timestamp(fetched_at).tz_convert(None),
             "record_status": "official",
             "classification_status": "source-classified",

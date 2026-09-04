@@ -124,6 +124,7 @@ h1 { max-width: 1000px; margin: 0; font-size: clamp(2.8rem, 6vw, 5.8rem); line-h
 }
 .status-strip.warning { border-left-color: var(--orange); background: #f6eadf; }
 .status-pill { padding: 3px 9px; border: 1px dashed var(--navy); border-radius: 999px; color: var(--navy); font-size: .78rem; white-space: nowrap; }
+.status-pill.stale { border-color: var(--orange); color: #8b3e00; white-space: normal; }
 
 .metrics-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 18px; }
 .metric { min-width: 0; padding-top: 12px; border-top: 2px solid var(--ink); }
@@ -183,7 +184,7 @@ tbody tr:nth-child(even) { background: #faf9f6; }
 .methodology section { margin-top: 30px; }
 .methodology h3 { margin: 0 0 8px; font-size: 1.15rem; }
 .methodology p { color: #4f555a; line-height: 1.65; }
-.release-card { display: grid; grid-template-columns: minmax(180px, .7fr) minmax(260px, 1.5fr) auto; align-items: center; gap: 24px; margin: 26px 0 34px; padding: 22px; background: var(--paper); border: 1px solid var(--line); border-left: 4px solid var(--blue); }
+.release-card { display: grid; grid-template-columns: minmax(180px, .7fr) minmax(260px, 1.5fr) auto; align-items: center; gap: 24px; margin: 26px 0 34px; padding: 22px; background: var(--paper); border: 1px solid var(--line); border-left: 4px solid var(--navy); }
 .release-card > div { display: grid; gap: 4px; }
 .release-card strong { font-size: 1.15rem; }
 .release-card p { margin: 0; }

@@ -177,22 +177,21 @@ with st.sidebar:
 
 analysis_records = combined if include_provisional else official
 source_loaded = pd.to_datetime(status.get("source_loaded_at"), errors="coerce")
-source_reviewed = pd.to_datetime(status.get("source_data_as_of"), errors="coerce")
 provisional_checked = pd.to_datetime(status.get("provisional_checked_through"), errors="coerce")
 today = pd.Timestamp.today().normalize()
-latest_checked = provisional_checked if include_provisional else source_reviewed
-if pd.isna(latest_checked):
-    latest_checked = today
-focus_as_of = coverage_date(analysis_records, current_year, latest_checked)
-summary = summary_metrics(
-    official, analysis_records, current_year, comparison_year, focus_as_of
-)
 official_current = official[official["year"].eq(current_year)]
 combined_current = analysis_records[analysis_records["year"].eq(current_year)]
 latest_dataset_year = max(available_years)
 latest_official_collision = official.loc[
     official["year"].eq(latest_dataset_year), "collision_date"
 ].max()
+latest_checked = provisional_checked if include_provisional else latest_official_collision
+if pd.isna(latest_checked):
+    latest_checked = today
+focus_as_of = coverage_date(analysis_records, current_year, latest_checked)
+summary = summary_metrics(
+    official, analysis_records, current_year, comparison_year, focus_as_of
+)
 open_provisional_total = int(combined["record_status"].eq("provisional").sum())
 
 st.markdown('<div class="eyebrow">Public data · revision aware · open source</div>', unsafe_allow_html=True)
@@ -443,41 +442,58 @@ with audit:
         )
 
 with methodology:
-    st.subheader("What counts as official")
+    st.subheader("Unit and official scope")
     st.markdown(
         "The canonical source is DataSF’s **Traffic Crashes Resulting in Fatality** dataset "
-        "(`dau3-4s8f`). Its year-to-date records originate with the Office of the Chief Medical "
-        "Examiner and include cases that City agencies determine meet the San Francisco Vision Zero "
-        "Fatality Protocol. The broader victim-level injury table (`nwes-mmgh`) is useful as a "
-        "cross-check, but it is not used to define the official count."
+        "(`dau3-4s8f`). Each row is one deceased person, so a crash can contribute more than one "
+        "fatality. Its year-to-date records originate with the Office of the Chief Medical Examiner "
+        "and include cases that City agencies determine meet the [San Francisco Vision Zero Fatality "
+        "Protocol](https://www.visionzerosf.org/wp-content/uploads/2024/02/"
+        "Vision-Zero-Traffic-Fatality-Protocol_2020_6.2.pdf). The protocol generally covers a death "
+        "within 30 days of a crash in the public right-of-way; most freeway, Presidio, and SFO cases "
+        "are excluded."
     )
-    st.subheader("Collision date versus death date")
+    st.subheader("Dates and freshness")
     st.markdown(
         "Charts group deaths by **collision date** for year-to-year comparability. Death date remains "
-        "in every record and download. A person may die days after a collision; that is not treated "
-        "as a date correction."
+        "in every record and download. DataSF publishes this table quarterly while the tracker checks "
+        "it daily. Pull time, portal load time, latest collision date, row-level `data_as_of`, and the "
+        "manual provisional check date are different concepts; this is not a real-time source."
     )
     st.subheader("Official versus provisional")
     st.markdown(
-        "A provisional record is a credible public report that has not yet been matched to an official "
-        "DataSF row. It is drawn with a dashed line and excluded from the official KPI. Candidate "
-        "matches are flagged for review but are never auto-reconciled. Once `matched_official_record_id` "
-        "is filled in, that provisional row no longer contributes to the combined total."
+        "The provisional layer is a small, manually curated—not exhaustive—set of public reports with "
+        "an identifiable incident, date, mode, location, durable source, and review date. It is drawn "
+        "with a dashed line and excluded from the official KPI. Candidate matches are flagged for review "
+        "but are never auto-reconciled. A reconciled row requires both `status=reconciled` and a "
+        "non-empty `matched_official_record_id`."
     )
     st.subheader("Modes and revisions")
     st.markdown(
-        "The app preserves DataSF’s `deceased` value and adds a transparent display taxonomy. "
-        "Standup powered devices remain micromobility; they are not silently relabeled as bicycles. "
+        "The app preserves DataSF’s `deceased` value and adds a transparent display taxonomy. Standup "
+        "powered devices remain micromobility; mopeds remain in Other / Unresolved pending an explicit "
+        "grouping decision. "
         "Every refresh stores a timestamped raw response and normalized Parquet snapshot. Additions, "
         "removals, date changes, location changes, and mode reclassifications are appended to the "
-        "revision log. The first snapshot is a baseline, not hundreds of fake additions."
+        "revision log. Coordinate differences below 0.000001° are ignored as serialization noise. "
+        "The first snapshot is a baseline, not hundreds of fake additions."
+    )
+    st.subheader("Comparability and uncertainty")
+    st.markdown(
+        "Annual values are counts from the current DataSF extract, not frozen copies of each final "
+        "annual report. The current extract reports 29 fatalities for 2016; [SFDPH’s 2024 year-end "
+        "report](https://www.visionzerosf.org/wp-content/uploads/2025/08/"
+        "Vision-Zero-2024-End-of-Year-Traffic-Fatality-Report.pdf) lists 32. Small annual counts "
+        "can fluctuate substantially, and year-to-year "
+        "differences do not establish causation."
     )
     st.warning(
         "Provisional public reports may later be excluded under the City protocol or reclassified. "
         "This tracker is a research and transparency tool, not an official City publication."
     )
     st.markdown(
-        "Sources: [official DataSF fatality dataset](https://data.sfgov.org/d/dau3-4s8f), "
+        "Sources: Vision Zero SF / TransBASE via the "
+        "[official DataSF fatality dataset](https://data.sfgov.org/d/dau3-4s8f), "
         "[SF.gov traffic fatalities page](https://www.sf.gov/data--traffic-fatalities), and "
         "[DataSF victim-level cross-check](https://data.sfgov.org/d/nwes-mmgh)."
     )

@@ -11,6 +11,7 @@ from src.datasf import normalize_mode
         ("Standup Powered Device Rider", "Motor Vehicle", "Micromobility"),
         ("Motorcyclist", "Motorcycle Collision", "While Riding a Motorcycle"),
         ("Driver", "Motor Vehicle & Pedestrian", "While Driving / Riding"),
+        ("Moped", "Moped vs Motor Vehicle", "Other / Unresolved"),
         ("Unknown", "Unknown", "Other / Unresolved"),
     ],
 )

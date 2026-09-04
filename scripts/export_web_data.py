@@ -97,7 +97,7 @@ def export_web_data(data_dir: Path = DATA_DIR, output_dir: Path = DEFAULT_OUTPUT
             {
                 "name": path.name,
                 "file": f"/data/snapshots/{json_name}",
-                "records": int(len(snapshot)),
+                "records": len(snapshot),
                 "collisionDateMax": (
                     _json_value(pd.to_datetime(snapshot["collision_date"]).max())
                     if not snapshot.empty

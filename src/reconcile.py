@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import math
 from pathlib import Path
 
 import pandas as pd
@@ -22,6 +23,19 @@ TRACKED_FIELDS = [
     "classification_status",
 ]
 
+COORDINATE_TOLERANCE = 1e-6
+REVISION_COLUMNS = [
+    "revision_id",
+    "observed_at",
+    "snapshot_from",
+    "snapshot_to",
+    "record_id",
+    "change_type",
+    "field",
+    "old_value",
+    "new_value",
+]
+
 
 def _display(value: object) -> str:
     if pd.isna(value):
@@ -35,6 +49,24 @@ def _revision_id(parts: list[str]) -> str:
     return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()[:20]
 
 
+def _values_equal(field: str, before: object, after: object) -> bool:
+    if pd.isna(before) and pd.isna(after):
+        return True
+    if pd.isna(before) or pd.isna(after):
+        return False
+    if field in {"latitude", "longitude"}:
+        try:
+            return math.isclose(
+                float(before),
+                float(after),
+                rel_tol=0.0,
+                abs_tol=COORDINATE_TOLERANCE,
+            )
+        except (TypeError, ValueError):
+            pass
+    return _display(before) == _display(after)
+
+
 def compare_snapshots(
     previous: pd.DataFrame,
     current: pd.DataFrame,
@@ -42,19 +74,8 @@ def compare_snapshots(
     current_name: str,
     observed_at: pd.Timestamp,
 ) -> pd.DataFrame:
-    columns = [
-        "revision_id",
-        "observed_at",
-        "snapshot_from",
-        "snapshot_to",
-        "record_id",
-        "change_type",
-        "field",
-        "old_value",
-        "new_value",
-    ]
     if previous.empty and current.empty:
-        return pd.DataFrame(columns=columns)
+        return pd.DataFrame(columns=REVISION_COLUMNS)
     old = previous.set_index("record_id", drop=False)
     new = current.set_index("record_id", drop=False)
     changes: list[dict[str, object]] = []
@@ -83,10 +104,12 @@ def compare_snapshots(
         for field in TRACKED_FIELDS:
             if field not in old.columns or field not in new.columns:
                 continue
-            before = _display(old.at[record_id, field])
-            after = _display(new.at[record_id, field])
-            if before == after:
+            before_value = old.at[record_id, field]
+            after_value = new.at[record_id, field]
+            if _values_equal(field, before_value, after_value):
                 continue
+            before = _display(before_value)
+            after = _display(after_value)
             kind = {
                 "normalized_mode": "mode_reclassification",
                 "native_party_type": "mode_reclassification",
@@ -101,7 +124,7 @@ def compare_snapshots(
                 "supervisor_district": "location_correction",
             }.get(field, "field_update")
             add_change(str(record_id), kind, field, before, after)
-    return pd.DataFrame(changes, columns=columns)
+    return pd.DataFrame(changes, columns=REVISION_COLUMNS)
 
 
 def append_revision_log(path: Path, changes: pd.DataFrame) -> pd.DataFrame:

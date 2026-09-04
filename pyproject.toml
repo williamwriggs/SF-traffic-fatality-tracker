@@ -5,11 +5,11 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "sf-traffic-fatality-tracker"
 version = "0.1.0"
-description = "An auditable Streamlit tracker for San Francisco traffic fatalities"
+description = "A revision-aware tracker for San Francisco traffic fatalities"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
-authors = [{ name = "SF Traffic Fatality Tracker contributors" }]
+authors = [{ name = "William W. Riggs" }]
 dependencies = [
   "matplotlib>=3.8",
   "pandas>=2.2",

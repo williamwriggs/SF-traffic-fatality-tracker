@@ -43,9 +43,9 @@ The Vercel project is `sf-traffic-fatality-tracker` in William Riggs’ personal
 
 ## Why the official source changed from the original handoff
 
-The initial brief named the victim-level injury table (`nwes-mmgh`). During implementation, DataSF’s live catalog exposed a more authoritative dedicated view: `dau3-4s8f`. Its metadata explicitly states that year-to-date records originate with Office of the Chief Medical Examiner death records and include cases that meet the multi-agency **San Francisco Vision Zero Fatality Protocol**.
+The initial brief named the victim-level injury table (`nwes-mmgh`). During implementation, DataSF’s live catalog exposed a more authoritative dedicated view: `dau3-4s8f`. Its metadata states that year-to-date records originate with Office of the Chief Medical Examiner death records and include cases that meet the multi-agency **San Francisco Vision Zero Fatality Protocol**.
 
-That dedicated view is now canonical. The victim-level table remains a useful cross-check but does not define the official KPI. This distinction already matters: the latest dedicated snapshot contains a May 2026 bicyclist fatality that was absent from the broader victim-table query used in the supplied chart. The tracker records future differences instead of silently overwriting them.
+That dedicated view is now canonical. The victim-level table remains a useful cross-check but does not define the official KPI. Extract totals are not assumed to equal every published year-end report: the current DataSF table contains 29 fatalities for 2016, while [SFDPH’s 2024 year-end report](https://www.visionzerosf.org/wp-content/uploads/2025/08/Vision-Zero-2024-End-of-Year-Traffic-Fatality-Report.pdf) lists 32. The source of that difference is not documented, so the tracker discloses it rather than silently substituting a value.
 
 ## Run locally
 
@@ -104,6 +104,8 @@ python -m src.export --comparison-year 2017 --current-year 2026 \
 
 Canonical dataset: [DataSF Traffic Crashes Resulting in Fatality](https://data.sfgov.org/d/dau3-4s8f)
 
+The analytical grain is one deceased person, not one crash. Multiple people killed in the same crash remain separate rows. Under the City protocol, the official total generally covers a death within 30 days of a crash in San Francisco’s public right-of-way. Most freeway deaths, Presidio incidents, and SFO incidents are excluded; qualifying freeway-ramp incidents at a City intersection and certain above-ground light-rail fatalities can be included. See the [Vision Zero Traffic Fatality Protocol](https://www.visionzerosf.org/wp-content/uploads/2024/02/Vision-Zero-Traffic-Fatality-Protocol_2020_6.2.pdf).
+
 The processed file keeps:
 
 - tracker record ID, crash ID, and person ID;
@@ -116,13 +118,15 @@ The processed file keeps:
 - DataSF dataset ID, row `data_as_of`, portal load time, and tracker ingest time;
 - official/provisional and classification status fields.
 
-Charts group fatalities by **collision date**. Death date remains in every record and download because a death can occur after the collision.
+Charts group fatalities by **collision date**. Death date remains in every record and download because a death can occur after the collision. DataSF calendar fields are retained as unzoned source-local calendar values; tracker fetch and revision-observation timestamps use UTC.
+
+Freshness dates have distinct meanings: `fetched_at` is the tracker pull, `data_loaded_at` is the portal load, `data_as_of` is retained as a row-level source field, the latest collision date is the newest published event, and `provisional_checked_through` is the manual public-report review date. DataSF describes this dataset as quarterly even though the tracker checks it daily; neither the official extract nor the provisional layer should be described as real time. Same-date comparisons use the latest published collision when only official records are shown, or the manual review-through date when the provisional layer is included; row-level `data_as_of` is not treated as a dataset-wide coverage date.
 
 ### Provisional records
 
-`data/provisional/incidents.csv` is deliberately small and reviewable. Each row needs a stable provisional ID, incident and death dates when known, source-native and normalized mode, location, source link, status, last-checked date, and notes.
+`data/provisional/incidents.csv` is deliberately small and reviewable. Inclusion requires an identifiable incident, incident or death date, reported mode, location, durable public source, review date, and enough detail to screen for duplication. The layer is manually curated and is not an exhaustive census of recent traffic deaths.
 
-Open provisional statuses are `unreconciled`, `provisional`, and `under-review`. A row stops contributing to the combined total only when `matched_official_record_id` is filled and its status is changed to `reconciled`. The fuzzy matcher can flag a candidate within 14 days and the same normalized mode, but it never auto-reconciles.
+Open provisional statuses are `unreconciled`, `provisional`, and `under-review`. Reconciliation is a validated state pair: `status=reconciled` requires a non-empty `matched_official_record_id`, and a matched ID requires that status. Other documented terminal outcomes, such as protocol exclusion or duplication, can stop contributing without an official match. The candidate matcher can flag one official record within 14 days and the same normalized mode, but it never auto-reconciles and location is not currently part of candidate scoring.
 
 Public reporting can describe a death that City agencies later exclude under the Vision Zero Fatality Protocol. That is why the dashboard draws provisional values with a dashed line, labels the official count separately, and avoids calling the combined count “official.”
 
@@ -137,9 +141,9 @@ The City-native `deceased` value is preserved. The display taxonomy is:
 | Standup Powered Device Rider, scooter | Micromobility |
 | Motorcyclist | While Riding a Motorcycle |
 | Driver, Passenger | While Driving / Riding |
-| Unrecognized or missing | Other / Unresolved |
+| Moped, unrecognized, or missing | Other / Unresolved |
 
-A scooter is never silently counted as a bicycle.
+A scooter is never silently counted as a bicycle. DataSF currently exposes `Moped` as a separate native value; those rows remain in Other / Unresolved until the project adopts and documents a specific moped grouping.
 
 ## Snapshot and revision behavior
 
@@ -160,16 +164,18 @@ data/
 └── provisional/incidents.csv
 ```
 
-The first snapshot is a baseline. It does not create hundreds of fake “addition” revisions. Later snapshots are compared by stable official record ID. Revision rows contain the two snapshot names, observation time, record ID, change type, changed field, and old/new value.
+The first snapshot is a baseline. It does not create hundreds of fake “addition” revisions. Later snapshots are compared by stable official record ID. Revision rows contain the two snapshot names, observation time, record ID, change type, changed field, and old/new value. Latitude and longitude changes smaller than `0.000001°` (roughly 11 cm of latitude) are ignored as serialization noise.
 
-If DataSF is unavailable, the refresh command returns a nonzero exit status and writes the error to `status.json`; it does not replace a good processed snapshot. The Streamlit app continues to serve the last successful data and shows its dates.
+Because the revision log is derived from immutable snapshots, it can be reproduced with `python -m scripts.rebuild_revisions`, followed by `python scripts/export_web_data.py` to refresh the browser payload.
+
+Before replacing the processed snapshot, the pipeline rejects empty payloads, missing or duplicate record IDs, invalid collision dates, missing deceased modes, and a sudden loss of more than 20% of records. A failed fetch or validation returns a nonzero exit status and records the attempt in `status.json`; it does not replace a good processed snapshot.
 
 ## Dashboard guide
 
 - **Overview**: scan-first KPIs, a two-year detail or multi-year trend view, mode composition, annual history, and seasonality. Historical selections use full-year/December labels; the latest year uses its actual checked-through date.
 - **Explore records**: filter by year, normalized mode, and status; inspect a location map; download exact rows.
 - **Snapshots & revisions**: compare any two stored snapshots, download the diff, inspect the persistent revision log, and review provisional matches.
-- **Methodology**: definitions, caveats, source links, and the reconciliation policy.
+- **About & methods**: definitions, caveats, source links, deployment details, and the reconciliation policy.
 
 Plotly’s camera control exports any visible chart from the browser. Every chart view can also be downloaded as a self-contained interactive HTML file, and the two-year detail view has a dedicated publication PNG export using a headless-safe Matplotlib renderer. The command-line exporter will use Kaleido when the optional `plotly-png` extra and a working Chrome runtime are available, then fall back to Matplotlib automatically.
 
@@ -192,13 +198,16 @@ Tests cover source-mode normalization, official/provisional metric separation, s
 ## Limitations
 
 - Official publication lags collisions and can be revised later.
+- DataSF publishes the canonical extract quarterly; daily polling does not make it a real-time source.
 - The Vision Zero Fatality Protocol can exclude deaths that appear traffic-related in initial reporting.
-- Public reports can be incomplete, wrong, duplicated, or later reclassified.
+- The manually curated provisional list is not exhaustive; public reports can be incomplete, wrong, duplicated, or later reclassified.
+- Current extract totals can differ from SFDPH’s frozen year-end reports; 2016 is 29 in DataSF versus 32 in the 2024 year-end report.
+- Small annual counts are volatile and year-to-year differences do not establish causation.
 - Coordinates are DataSF’s geocoded collision locations and can be generalized to a street segment or intersection.
 - Monthly charts use collision month, not death month.
 - The dashboard is an independent analysis and must not be attributed to the City and County of San Francisco.
 
-Review the City dataset metadata before republishing analysis. Acknowledge Vision Zero and TransBASE, include the pull date, and retain the caveats.
+Review the City dataset metadata before republishing analysis. Attribute the data to **Vision Zero SF / TransBASE via DataSF**, include the pull date, link the original dataset, retain the caveats, and do not attribute this project’s analysis to the City.
 
 ## Contributing
 
@@ -206,4 +215,4 @@ Issues and pull requests are welcome. For a provisional incident correction, inc
 
 ## License
 
-Code is MIT licensed. DataSF’s source data is public data; its metadata and use caveats remain applicable. News links are provenance references, not redistributed article content.
+Code is MIT licensed. The DataSF source is published under the [Open Data Commons Public Domain Dedication and License](https://opendatacommons.org/licenses/pddl/1-0/); its metadata and use caveats remain applicable. News links are provenance references, not redistributed article content.
