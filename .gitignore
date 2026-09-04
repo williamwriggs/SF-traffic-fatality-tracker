@@ -6,3 +6,7 @@ __pycache__/
 .ruff_cache/
 .streamlit/secrets.toml
 data/processed/*.tmp
+web/node_modules/
+web/.next/
+web/out/
+.vercel/

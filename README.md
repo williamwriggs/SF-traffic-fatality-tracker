@@ -1,6 +1,6 @@
 # SF Traffic Fatality Tracker
 
-An open-source, revision-aware tracker for traffic fatalities in San Francisco. It fetches the City’s official Vision Zero fatality records from DataSF, preserves every source snapshot, keeps recent public reports separate until reconciliation, and serves a Streamlit dashboard for year-to-year comparison and downloads.
+An open-source, revision-aware tracker for traffic fatalities in San Francisco. It fetches the City’s official Vision Zero fatality records from DataSF, preserves every source snapshot, keeps recent public reports separate until reconciliation, and serves a Vercel-hosted Next.js dashboard for year-to-year comparison and downloads. The original Streamlit interface remains available during the migration period.
 
 Research by **William W. Riggs**. Source code, methodology, and revision history are maintained in this repository.
 
@@ -43,6 +43,19 @@ streamlit run app.py
 ```
 
 Then open the local URL printed by Streamlit, normally `http://localhost:8501`.
+
+### Next.js dashboard
+
+The production web interface lives in `web/` and uses the same processed snapshots as the Python application.
+
+```bash
+python scripts/export_web_data.py
+cd web
+pnpm install
+pnpm dev
+```
+
+Open `http://localhost:3000`. The exported app is fully static: the current dashboard payload is written to `web/public/data/tracker.json`, while individual immutable snapshots are written separately and loaded only when requested.
 
 A Socrata token is optional for low-volume use. For more generous API limits:
 
@@ -145,7 +158,9 @@ Plotly’s camera control exports any visible chart from the browser. Every char
 
 `.github/workflows/refresh.yml` runs tests, refreshes DataSF daily, and commits changed data. Add a repository secret named `SOCRATA_APP_TOKEN` if desired. GitHub Actions needs `contents: write`, already declared in the workflow.
 
-For Streamlit Community Cloud, deploy `app.py` and keep processed snapshots in the repository. The scheduled GitHub refresh becomes the durable source of updates; Streamlit’s data cache expires every 15 minutes.
+The production dashboard is deployed from the `web/` root directory on Vercel. It loads the latest tracker payload and requested immutable snapshots from the `main` branch at runtime, so the scheduled refresh becomes visible without rebuilding the site. Connecting the Vercel project to this GitHub repository additionally enables preview deployments for pull requests and automatic production deployments for code changes merged to `main`.
+
+The legacy Streamlit deployment can continue serving `app.py` during migration. Once the Vercel application reaches feature parity and a permanent domain is attached, it can be retired or changed to a migration notice.
 
 ## Testing
 

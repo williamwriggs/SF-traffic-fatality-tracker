@@ -1,4 +1,4 @@
-.PHONY: install refresh app test
+.PHONY: install refresh app test web-data web-install web-dev web-build
 
 install:
 	python -m pip install -e ".[dev]"
@@ -11,3 +11,15 @@ app:
 
 test:
 	python -m pytest -q
+
+web-data:
+	python scripts/export_web_data.py
+
+web-install:
+	cd web && pnpm install
+
+web-dev: web-data
+	cd web && pnpm dev
+
+web-build: web-data
+	cd web && pnpm build

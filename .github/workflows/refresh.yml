@@ -28,14 +28,16 @@ jobs:
         run: python -m src.refresh
         env:
           SOCRATA_APP_TOKEN: ${{ secrets.SOCRATA_APP_TOKEN }}
+      - name: Export browser-ready dashboard data
+        run: python scripts/export_web_data.py
       - name: Commit a changed snapshot
         run: |
-          if git diff --quiet -- data; then
+          if git diff --quiet -- data web/public/data; then
             echo "No DataSF changes"
             exit 0
           fi
           git config user.name "sf-fatality-refresh[bot]"
           git config user.email "sf-fatality-refresh[bot]@users.noreply.github.com"
-          git add data
+          git add data web/public/data
           git commit -m "data: refresh DataSF snapshot"
           git push
