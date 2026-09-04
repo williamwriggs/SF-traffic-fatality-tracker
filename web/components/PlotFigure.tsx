@@ -5,9 +5,11 @@ import type { Config, Data, Layout } from "plotly.js";
 
 const Plot = dynamic(() => import("react-plotly.js"), { ssr: false });
 
+type PlotLayout = Partial<Layout> & Record<string, unknown>;
+
 interface PlotFigureProps {
   data: Data[];
-  layout: Partial<Layout>;
+  layout: PlotLayout;
   config?: Partial<Config>;
   className?: string;
 }
