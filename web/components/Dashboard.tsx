@@ -221,7 +221,8 @@ export default function Dashboard({ initialData }: { initialData: TrackerData })
     try {
       const fetchSnapshot = async (index: number) => {
         const snapshot = trackerData.snapshots[index];
-        const remote = await fetch(`${LIVE_DATA}/snapshots/${snapshot.name}.json`, { cache: "no-store" });
+        const remoteFile = snapshot.file.replace(/^\/data\//, "");
+        const remote = await fetch(`${LIVE_DATA}/${remoteFile}`, { cache: "no-store" });
         if (remote.ok) return remote;
         const local = await fetch(snapshot.file);
         if (!local.ok) throw new Error("Snapshot data could not be loaded");
