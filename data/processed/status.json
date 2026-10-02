@@ -1,14 +1,14 @@
 {
   "refresh_ok": true,
-  "fetched_at": "2026-09-08T18:43:53+00:00",
-  "source_data_as_of": "2026-07-08T00:00:00",
-  "source_loaded_at": "2026-07-27T13:48:32.529000",
+  "fetched_at": "2026-10-02T19:58:38+00:00",
+  "source_data_as_of": "2026-09-24T00:00:00",
+  "source_loaded_at": "2026-09-25T15:07:24.744000",
   "provisional_checked_through": "2026-08-12T00:00:00",
-  "official_records": 366,
+  "official_records": 370,
   "open_provisional_records": 2,
-  "snapshot": "fatalities_20260908T184353Z.parquet",
-  "raw_snapshot": "raw/2026-09-08/dau3-4s8f_2026-09-08T184353Z.json",
-  "raw_manifest": "raw/2026-09-08/manifest_2026-09-08T184353Z.json",
-  "revisions_detected": 0,
-  "revision_log_rows": 1
+  "snapshot": "fatalities_20261002T195838Z.parquet",
+  "raw_snapshot": "raw/2026-10-02/dau3-4s8f_2026-10-02T195838Z.json",
+  "raw_manifest": "raw/2026-10-02/manifest_2026-10-02T195838Z.json",
+  "revisions_detected": 4,
+  "revision_log_rows": 5
 }
