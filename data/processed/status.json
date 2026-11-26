@@ -1,14 +1,14 @@
 {
   "refresh_ok": true,
-  "fetched_at": "2026-11-25T23:39:28+00:00",
+  "fetched_at": "2026-11-26T23:53:10+00:00",
   "source_data_as_of": "2026-11-19T00:00:00",
   "source_loaded_at": "2026-11-24T10:10:12.371000",
   "provisional_checked_through": "2026-08-12T00:00:00",
   "official_records": 373,
   "open_provisional_records": 2,
-  "snapshot": "fatalities_20261125T233928Z.parquet",
-  "raw_snapshot": "raw/2026-11-25/dau3-4s8f_2026-11-25T233928Z.json",
-  "raw_manifest": "raw/2026-11-25/manifest_2026-11-25T233928Z.json",
+  "snapshot": "fatalities_20261126T235310Z.parquet",
+  "raw_snapshot": "raw/2026-11-26/dau3-4s8f_2026-11-26T235310Z.json",
+  "raw_manifest": "raw/2026-11-26/manifest_2026-11-26T235310Z.json",
   "revisions_detected": 0,
   "revision_log_rows": 10
 }
